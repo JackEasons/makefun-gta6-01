@@ -25,15 +25,15 @@ mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
 ## What's in the world
 
-- **A city to explore** — a 7×7 grid of pastel blocks, palm-lined boulevards, a beach and the sea, all under a low sunset sun.
-- **On foot and by car** — third-person walking with a mouse-orbit camera; arcade driving with steering, braking and wall collisions. Press **E** near a parked car to take it.
-- **Traffic and pedestrians** — AI cars cruise the streets, pedestrians stroll the sidewalks.
-- **Wanted level** — 0–5 stars for stealing cars, hitting pedestrians and ramming cruisers. Police cars chase and ram; lay low and the heat fades. Get busted on foot or wasted in a crash and you wake at the safehouse, $200 lighter.
-- **Three story missions** — *The Pickup*, *Hot Wheels*, *The Long Way Home* — with a gold beacon, radio dialogue from Silas and cash rewards.
-- **Combat** — fists (F or click) on foot.
-- **HUD** — wanted stars, cash, health, speed, mission objective and a live minimap.
-- **Save** — cash, jobs done and Mara's position persist in localStorage; Continue picks up where you left off.
-- **Sound** — synthesized WebAudio: engine hum, two-tone siren, pickup chimes and a mission jingle. No audio files.
+- **A city to explore** — a 7×7 grid of pastel blocks, palm-lined boulevards, a beach with umbrellas and the sea, all under a low sunset sun.
+- **On foot and by car** — third-person walking with a mouse-orbit camera; arcade driving with steering, braking and wall collisions. Press **E** near a parked car to take it. Every car has an original model name and a condition that falls as it is crashed.
+- **Traffic and pedestrians** — AI cars cruise the streets, pedestrians stroll the sidewalks, and a pink scooter putters along the boulevard.
+- **Wanted level** — 0–5 stars for stealing cars, hitting pedestrians and ramming cruisers. Police cars chase and ram; at four stars a helicopter joins with a searchlight. Lay low and the heat fades. Get busted on foot or wasted in a crash and you wake at the safehouse, $200 lighter.
+- **Three story missions** — *The Pickup*, *Hot Wheels*, *The Long Way Home* — with stages, a gold beacon, radio dialogue from Silas in a dialogue box, and cash rewards. The last job runs on a three-minute clock.
+- **Combat** — fists (F or click) plus a four-slot arsenal (pistol, shotgun, Viper SMG) unlocked as the story advances, with real ammo. Guns restock when a job pays out.
+- **HUD** — wanted stars and an air-unit flag, cash, health, armour and respect bars, a mission panel (job, stage, next step, clock), a police dispatch panel naming every unit with its live distance, weapon slots, a dialogue box with a character avatar, the radio station, the car's name and condition, the district and the heat, day and clock — and a live round minimap.
+- **Save** — cash, jobs done, respect, armour, day, clock and ammo persist in localStorage; Continue picks up where you left off.
+- **Sound** — synthesized WebAudio: engine hum, two-tone siren, gunshots, radio blips, pickup chimes and a mission jingle. No audio files.
 
 ## Controls
 
@@ -42,7 +42,9 @@ mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 | W A S D / arrows | Move / drive |
 | Shift | Run |
 | E | Enter / exit car |
-| F or click | Punch |
+| F or click | Punch / fire the selected weapon |
+| 1–4 | Pick a weapon slot |
+| R | Change the radio station |
 | Tab | Start the next job |
 | P / Esc | Pause |
 | M | Mute |
@@ -50,6 +52,6 @@ mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
 ## Structure
 
-`game/src/` is split by job: `city.js` builds the world, `player.js` walks Mara, `vehicles.js` builds and drives cars, `traffic.js` runs AI cars and pedestrians, `police.js` runs the wanted level and chases, `missions.js` runs the story, `combat.js` throws punches, `hud.js` draws the HUD and minimap, `audio.js` synthesizes sound, `save.js` persists progress, `input.js` reads keys and mouse, `main.js` boots the game and runs the loop.
+`game/src/` is split by job: `city.js` builds the world, `player.js` walks Mara, `vehicles.js` builds and drives cars (and the helicopter), `traffic.js` runs AI cars, pedestrians and the scooter, `police.js` runs the wanted level, the dispatch roster and the air unit, `missions.js` runs the story, `combat.js` throws punches and fires guns, `hud.js` draws the HUD and minimap, `audio.js` synthesizes sound, `save.js` persists progress, `input.js` reads keys and mouse, `main.js` boots the game and runs the loop.
 
 Built by an AI agent for make.fun's [Make GTA 6](https://make.fun/bounty/gta6-01) bounty. Ref: gbg9q3ye.

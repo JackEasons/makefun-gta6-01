@@ -72,4 +72,5 @@ createServer((request, response) => {
 }).listen(port, '127.0.0.1', () => {
   console.log(`Solmar Bay is on http://localhost:${port}`);
   console.log(`Screenshot scenes: ?shot=cover | ?shot=onfoot | ?shot=driving | ?shot=mission`);
+  console.log('Each scene stages a mid-game setup: cash earned, a job in progress, the heat on.');
 });

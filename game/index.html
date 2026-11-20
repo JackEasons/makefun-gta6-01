@@ -20,13 +20,42 @@
 <div id="hud" class="hidden">
   <div id="top-left">
     <div id="cash">$0</div>
+    <div class="bar-label">HEALTH</div>
     <div id="health"><div id="health-fill"></div></div>
+    <div class="bar-label">ARMOUR</div>
+    <div id="armour"><div id="armour-fill"></div></div>
+    <div class="bar-label">RESPECT</div>
+    <div id="respect"><div id="respect-fill"></div></div>
   </div>
-  <div id="stars" aria-label="Wanted level">☆☆☆☆☆</div>
-  <div id="objective"></div>
+  <div id="top-right">
+    <div id="stars" aria-label="Wanted level">☆☆☆☆☆</div>
+    <div id="air-unit" class="hidden">AIR UNIT DEPLOYED</div>
+    <div id="day-clock">DAY 1 · 17:40</div>
+  </div>
+  <div id="mission">
+    <div id="mission-title">JOB 1/3 · THE PICKUP</div>
+    <div id="mission-stage">READY</div>
+    <div id="mission-next">Press Tab to start the next job.</div>
+    <div id="mission-timer"></div>
+  </div>
+  <div id="dispatch">
+    <div id="dispatch-title">SBPB DISPATCH</div>
+    <div id="dispatch-rows"></div>
+  </div>
+  <div id="weapons"></div>
+  <div id="dialogue">
+    <div id="dialogue-avatar">SC</div>
+    <div id="dialogue-text"><div id="dialogue-name"></div><div id="dialogue-line"></div></div>
+  </div>
   <div id="toast" role="status"></div>
-  <canvas id="minimap" width="150" height="150" aria-label="Minimap"></canvas>
+  <canvas id="minimap" width="200" height="200" aria-label="Minimap"></canvas>
+  <div id="location-line"></div>
+  <div id="car-info" class="hidden">
+    <div id="car-name"></div>
+    <div id="car-condition"><div id="car-condition-fill"></div></div>
+  </div>
   <div id="speed"></div>
+  <div id="radio-line"></div>
   <div id="hint"></div>
 </div>
 
@@ -41,7 +70,7 @@
       <button id="play-btn">Play</button>
       <button id="continue-btn" class="hidden">Continue</button>
     </div>
-    <p class="controls">W A S D move &amp; drive · Shift run · E enter / exit car · F punch · Tab next job · P pause · M mute · Drag mouse to look</p>
+    <p class="controls">W A S D move &amp; drive · Shift run · E enter / exit car · F punch / fire · 1-4 weapons · R radio · Tab next job · P pause · M mute · Drag mouse to look</p>
     <p class="fine">An original game. Its city, people, cars and story are invented here — nothing from any commercial game.</p>
   </div>
 </div>

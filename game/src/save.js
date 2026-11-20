@@ -1,7 +1,8 @@
 // Solmar Bay — saving. Progress (cash, missions finished, where Mara
 // stands and her health) lives in localStorage, so Continue picks up where
-// the last session left off. Nothing about the wanted level is saved:
-// the law forgets overnight, as it should.
+// the last session left off. The save also keeps her respect, armour, the
+// day and clock, and the ammo in each weapon slot. Nothing about the wanted
+// level is saved: the law forgets overnight, as it should.
 
 const SAVE_KEY = 'solmar-bay-save-v1';
 
@@ -16,6 +17,11 @@ export function saveGame(state) {
         playerZ: state.playerZ,
         heading: state.heading,
         health: state.health,
+        respect: state.respect ?? 0,
+        armour: state.armour ?? 0,
+        day: state.day ?? 1,
+        clockMinutes: state.clockMinutes ?? 1060,
+        ammo: state.ammo ?? null,
         savedAt: Date.now(),
       }),
     );

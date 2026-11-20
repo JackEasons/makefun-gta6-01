@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { PLAYER_TUNING, WORLD } from './config.js';
 import { resolveCircle } from './vehicles.js';
 
-export function makePerson(shirtColor, pantsColor, skinColor = 0xd8a070) {
+export function makePerson(shirtColor, pantsColor, skinColor = 0xd8a070, hairColor = 0x3a2a1a) {
   const group = new THREE.Group();
   const shirt = new THREE.MeshLambertMaterial({ color: shirtColor });
   const pants = new THREE.MeshLambertMaterial({ color: pantsColor });
@@ -20,6 +20,14 @@ export function makePerson(shirtColor, pantsColor, skinColor = 0xd8a070) {
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), skin);
   head.position.y = 1.68;
   group.add(head);
+
+  // Hair: a half-sphere cap under the hat, so the crowd is not bald.
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.25, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshLambertMaterial({ color: hairColor }),
+  );
+  hair.position.y = 1.72;
+  group.add(hair);
 
   const cap = new THREE.Mesh(
     new THREE.CylinderGeometry(0.25, 0.25, 0.1, 12),

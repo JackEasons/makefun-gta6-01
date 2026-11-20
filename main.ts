@@ -48,7 +48,9 @@ writeFileSync(join(out, 'dossier.json'), dossier);
 
 // A short build summary on stdout, so a human running it sees what went in.
 // Screenshot sizes are printed too: the gate caps each one at 256 KiB, and
-// a size here that creeps over the cap is the first thing to catch.
+// a size here that creeps over the cap is the first thing to catch. The
+// biggest game file is printed as well: the dossier shows sources up to its
+// 160 KiB text cap, so a file that grows past it is worth knowing about.
 const shotNames = readdirSync(join(out, 'screenshots')).filter((n) => !n.startsWith('.'));
 const shotSizes = shotNames
   .map((n) => `${n} ${Math.round(statSync(join(out, 'screenshots', n)).size / 1024)} KiB`)
@@ -58,3 +60,11 @@ console.log(
   `${shotNames.length} screenshots (${shotSizes}), ` +
   `dossier ${statSync(join(out, 'dossier.json')).size} bytes -> ${out}`,
 );
+const gameFiles = readdirSync(join(out, 'game', 'src')).filter((n) => n.endsWith('.js'));
+const biggest = gameFiles
+  .map((n) => ({ name: n, size: statSync(join(out, 'game', 'src', n)).size }))
+  .sort((a, b) => b.size - a.size)[0];
+if (biggest) console.log(`Largest game source: game/src/${biggest.name} (${biggest.size} bytes).`);
+// The gate caps game/index.html at 1 MiB; it is small, but print it so a
+// regression shows up here instead of in a failed check.
+console.log(`game/index.html: ${statSync(join(out, 'game', 'index.html')).size} bytes.`);

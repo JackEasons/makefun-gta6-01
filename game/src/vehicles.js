@@ -2,10 +2,13 @@
 // body, cabin, four wheels, headlights and taillights, no model files.
 // makeCar builds one; driveCar advances the car the player is driving with
 // arcade physics (throttle, brake, steering that fades with speed) and a
-// circle-vs-building collision that slides along walls.
+// circle-vs-building collision that slides along walls. Each car has an
+// original model name and a condition that falls as it is crashed into
+// things — the HUD shows both while Mara drives it. The police helicopter
+// is built here too: body, tail, spinning rotor and a searchlight cone.
 
 import * as THREE from 'three';
-import { CAR_TUNING, PALETTE } from './config.js';
+import { CAR_TUNING, PALETTE, CAR_MODELS } from './config.js';
 import { pick } from './random.js';
 
 export function makeCar(rng, color, style = 'sedan') {
@@ -63,6 +66,8 @@ export function makeCar(rng, color, style = 'sedan') {
     wheels,
     color,
     style,
+    modelName: pick(rng, CAR_MODELS[style]),
+    condition: 100, // percent; crashes and rams wear it down
     heading: 0,
     speed: 0,
     steer: 0,
@@ -90,8 +95,45 @@ export function makePoliceCar(rng) {
   return car;
 }
 
+// The air unit: a boxy helicopter with a spinning rotor and a searchlight
+// cone that hangs under it, apex at the belly, wide end on the street.
+export function makeHelicopter() {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x2a4a6a });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.1, 1.6), bodyMat);
+  group.add(body);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.5), new THREE.MeshLambertMaterial({ color: 0x9fc8e8 }));
+  glass.position.set(1.2, 0.1, 0);
+  group.add(glass);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 0.5), bodyMat);
+  tail.position.set(-2.6, 0.2, 0);
+  group.add(tail);
+  const rotor = new THREE.Mesh(new THREE.BoxGeometry(7, 0.08, 0.5), new THREE.MeshLambertMaterial({ color: 0x22242a }));
+  rotor.position.y = 0.8;
+  group.add(rotor);
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(4.5, 26, 16, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0xfff2b0,
+      transparent: true,
+      opacity: 0.16,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  cone.position.y = -13;
+  group.add(cone);
+  return { group, rotor, cone };
+}
+
 export function randomCarColor(rng) {
   return pick(rng, PALETTE.car);
+}
+
+// A crash or a ram wears a car down; returns the new condition.
+export function damageCar(car, amount) {
+  car.condition = Math.max(0, car.condition - amount);
+  return car.condition;
 }
 
 // Arcade driving for the car the player is in. Returns the distance moved

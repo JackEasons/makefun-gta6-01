@@ -1,15 +1,17 @@
 // Solmar Bay — the city alive: AI cars driving the street grid and
 // pedestrians strolling the sidewalks. Traffic cars follow street centrelines
 // and turn at random intersections; pedestrians wander between sidewalk
-// corners. Both are cheap on purpose: the city should feel busy, not heavy.
+// corners. A pink scooter putters along the boulevard too. Both are cheap
+// on purpose: the city should feel busy, not heavy.
 
 import * as THREE from 'three';
 import { WORLD } from './config.js';
 import { makeCar, randomCarColor } from './vehicles.js';
 import { makePerson } from './player.js';
-import { pick, range, rangeInt } from './random.js';
+import { pick, range, rangeInt, chance } from './random.js';
 
 const PEDESTRIAN_SHIRTS = [0xe86a6a, 0x6aa8e8, 0xe8d86a, 0x9a6ae8, 0x6ae88a, 0xe8e8e8, 0x3a3f4a];
+const PEDESTRIAN_HAIR = [0x2a1a0a, 0x6a4a2a, 0x8a8a8a, 0x1a1a1a, 0xd8b060];
 
 export class Traffic {
   constructor(scene, rng, colliders, streetCenters) {
@@ -19,12 +21,13 @@ export class Traffic {
     this.streetCenters = streetCenters;
     this.cars = [];
     this.peds = [];
+    this.scooter = null;
     this.half = (WORLD.blocks * WORLD.pitch) / 2;
   }
 
   spawnCars(count) {
     for (let i = 0; i < count; i += 1) {
-      const car = makeCar(this.rng, randomCarColor(this.rng), this.rng() < 0.3 ? 'coupe' : 'sedan');
+      const car = makeCar(this.rng, randomCarColor(this.rng), chance(this.rng, 0.3) ? 'coupe' : 'sedan');
       car.parked = false;
       const axis = this.rng() < 0.5 ? 'x' : 'z';
       const street = pick(this.rng, this.streetCenters);
@@ -45,7 +48,12 @@ export class Traffic {
 
   spawnPedestrians(count) {
     for (let i = 0; i < count; i += 1) {
-      const person = makePerson(pick(this.rng, PEDESTRIAN_SHIRTS), pick(this.rng, [0x2a2f3a, 0x5a4a3a, 0x3a4a5a]));
+      const person = makePerson(
+        pick(this.rng, PEDESTRIAN_SHIRTS),
+        pick(this.rng, [0x2a2f3a, 0x5a4a3a, 0x3a4a5a]),
+        0xd8a070,
+        pick(this.rng, PEDESTRIAN_HAIR),
+      );
       const street = pick(this.rng, this.streetCenters);
       const along = range(this.rng, -this.half, this.half);
       const side = this.rng() < 0.5;
@@ -60,6 +68,33 @@ export class Traffic {
       this.scene.add(person.group);
       this.peds.push(person);
     }
+  }
+
+  // A pink scooter with a rider, puttering along a street. It drives on
+  // one axis at a time; staging can turn it onto another street.
+  spawnScooter() {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.5, 1.6),
+      new THREE.MeshLambertMaterial({ color: 0xff6a9a }),
+    );
+    body.position.y = 0.45;
+    group.add(body);
+    const wheelGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.18, 10);
+    const wheelMat = new THREE.MeshLambertMaterial({ color: 0x14161a });
+    for (const z of [0.7, -0.7]) {
+      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(0, 0.28, z);
+      group.add(wheel);
+    }
+    const rider = makePerson(0xff8ab0, 0x2a2f3a, 0xd8a070, 0x2a1a0a);
+    rider.group.position.y = 0.55;
+    group.add(rider.group);
+    group.position.set(-this.half - 20, 0, 30 + 2.2);
+    group.rotation.y = Math.PI / 2;
+    this.scene.add(group);
+    this.scooter = { group, speed: 9, axis: 'x', rider };
   }
 
   nextCorner(from) {
@@ -91,6 +126,20 @@ export class Traffic {
       if (nearX !== undefined && nearZ !== undefined && this.rng() < dt * 0.5) {
         car.heading = pick(this.rng, [0, Math.PI / 2, Math.PI, -Math.PI / 2]);
       }
+    }
+
+    // The scooter putters on, wrapping at the city edge.
+    if (this.scooter) {
+      const s = this.scooter;
+      if (s.axis === 'x') {
+        s.group.position.x += s.speed * dt;
+        if (s.group.position.x > this.half + 20) s.group.position.x = -this.half - 20;
+      } else {
+        s.group.position.z += s.speed * dt;
+        if (s.group.position.z > this.half + 20) s.group.position.z = -this.half - 20;
+      }
+      s.rider.legL.rotation.x = Math.sin(performance.now() / 160) * 0.25;
+      s.rider.legR.rotation.x = -Math.sin(performance.now() / 160) * 0.25;
     }
 
     // Pedestrians: stroll to their corner, then pick another.

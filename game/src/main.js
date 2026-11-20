@@ -2,16 +2,17 @@
 // and the law, then run the game. Modes: menu, playing, paused, busted,
 // wasted, finale. The loop reads input, advances every system, moves the
 // camera, and paints the HUD. ?shot=cover|onfoot|driving|mission stages a
-// fixed scene for screenshots instead of opening the menu.
+// fixed mid-game scene for screenshots instead of opening the menu — cash
+// earned, a job in progress, the heat on, the air unit up.
 
 import * as THREE from 'three';
-import { WORLD, PALETTE, PLAYER_TUNING, CAR_TUNING, WANTED_TUNING, STORY } from './config.js';
+import { WORLD, PALETTE, PLAYER_TUNING, CAR_TUNING, WANTED_TUNING, STORY, RADIO, DAY_TUNING } from './config.js';
 import { makeRng, hashSeed } from './random.js';
-import { createInput, ACTION_ENTER, ACTION_PUNCH, ACTION_PAUSE, ACTION_MUTE, ACTION_MISSION } from './input.js';
+import { createInput, ACTION_ENTER, ACTION_PUNCH, ACTION_PAUSE, ACTION_MUTE, ACTION_MISSION, ACTION_WEAPON, ACTION_RADIO } from './input.js';
 import { AudioEngine } from './audio.js';
 import { buildCity } from './city.js';
 import { makeMara, walkPlayer } from './player.js';
-import { makeCar, makePoliceCar, randomCarColor, driveCar, collideCircle, resolveCircle } from './vehicles.js';
+import { makeCar, makePoliceCar, randomCarColor, driveCar, damageCar, collideCircle, resolveCircle } from './vehicles.js';
 import { Traffic } from './traffic.js';
 import { Police } from './police.js';
 import { MissionManager } from './missions.js';
@@ -72,12 +73,20 @@ missions.markCoupe(coupe);
 
 traffic.spawnCars(8);
 traffic.spawnPedestrians(14);
+traffic.spawnScooter();
 
 // Game state.
 const state = {
   mode: 'menu',
   cash: 0,
   health: PLAYER_TUNING.health,
+  armour: 0,
+  respect: 0,
+  day: DAY_TUNING.startDay,
+  clockMinutes: DAY_TUNING.startClock,
+  radioIndex: 0,
+  radioTimer: 0,
+  airWarned: false,
   currentCar: null,
   camYaw: Math.PI * 0.75,
   camPitch: 0.34,
@@ -94,6 +103,25 @@ function announce(text) {
 
 function toast(text, seconds) {
   hud.showToast(text, seconds);
+}
+
+// A story line, shown in the dialogue box with Silas's avatar instead of
+// the toast. The "Silas: " prefix and the quotes are the script's, not the
+// spoken line, so they are stripped for the box.
+function say(line) {
+  const clean = line.replace(/^Silas: /, '').replace(/^"|"$/g, '');
+  hud.showDialogue('Silas Crane', 'SC', clean, 6);
+}
+
+// Damage first eats the armour, then the health.
+function applyDamage(amount) {
+  let rest = amount;
+  if (state.armour > 0) {
+    const absorbed = Math.min(state.armour, rest);
+    state.armour -= absorbed;
+    rest -= absorbed;
+  }
+  state.health = Math.max(0, state.health - rest);
 }
 
 function playerPos() {
@@ -120,6 +148,10 @@ function enterNearestCar() {
   best.parked = false;
   mara.group.visible = false;
   state.camYaw = best.heading + Math.PI;
+  // A new ride gets a new station.
+  state.radioIndex = (state.radioIndex + 1) % RADIO.length;
+  state.radioTimer = 0;
+  audio.stationBlip();
   if (!best.stolen) {
     best.stolen = true;
     police.addCrime(WANTED_TUNING.stealCar);
@@ -171,6 +203,11 @@ function saveProgress() {
     playerZ: pos.z,
     heading: playerHeading(),
     health: state.health,
+    respect: state.respect,
+    armour: state.armour,
+    day: state.day,
+    clockMinutes: state.clockMinutes,
+    ammo: combat.weapons.map((w) => w.ammo),
   });
 }
 
@@ -192,6 +229,15 @@ function startPlaying(fromSave) {
       mara.group.position.set(saved.playerX, 0, saved.playerZ);
       mara.group.rotation.y = saved.heading || 0;
       state.health = saved.health;
+      state.respect = saved.respect ?? 0;
+      state.armour = saved.armour ?? 0;
+      state.day = saved.day ?? DAY_TUNING.startDay;
+      state.clockMinutes = saved.clockMinutes ?? DAY_TUNING.startClock;
+      if (Array.isArray(saved.ammo) && saved.ammo.length === combat.weapons.length) {
+        saved.ammo.forEach((a, i) => {
+          if (typeof a === 'number') combat.weapons[i].ammo = a;
+        });
+      }
       toast(`Welcome back, Mara. $${state.cash} in your pocket.`, 4);
     }
   }
@@ -213,21 +259,45 @@ function handleActions() {
       if (state.currentCar) exitCar();
       else enterNearestCar();
     }
-    if (actions & ACTION_PUNCH && !state.currentCar) {
-      const result = combat.punch(mara.group.position, mara.group.rotation.y, traffic, police, audio);
-      if (result === 'ped') {
-        police.addCrime(WANTED_TUNING.hitPedestrian);
-        toast('You knocked them flat. Someone called it in. ★', 3);
-      } else if (result === 'police') {
-        police.addCrime(WANTED_TUNING.punchPolice);
-        toast('You just punched a cop. Run. ★★', 3);
+    // F fires the selected weapon — on foot, and from the driver's seat
+    // too: a drive-by is the whole point of a gun in a car. Fists stay
+    // on-foot only; you cannot throw a punch through a windshield.
+    if (actions & ACTION_PUNCH) {
+      if (state.currentCar && combat.current().id === 'fists') {
+        toast('You cannot throw a punch from the driver seat.', 2);
+      } else {
+        const pos = state.currentCar ? state.currentCar.group.position : mara.group.position;
+        const heading = state.currentCar ? state.currentCar.heading : mara.group.rotation.y;
+        const result = combat.fire(pos, heading, traffic, police, audio);
+        if (result === 'ped') {
+          police.addCrime(WANTED_TUNING.hitPedestrian);
+          toast('You knocked them flat. Someone called it in. ★', 3);
+        } else if (result === 'police') {
+          const crime = combat.current().id === 'fists' ? WANTED_TUNING.punchPolice : WANTED_TUNING.hitPolice;
+          police.addCrime(crime);
+          toast(combat.current().id === 'fists' ? 'You just punched a cop. Run. ★★' : 'You just shot at a cop. Run. ★★', 3);
+        } else if (result === 'empty') {
+          toast('Out of ammo — finish a job to restock.', 3);
+        }
       }
     }
     if (actions & ACTION_MISSION) {
       if (!missions.active && missions.currentDef()) {
-        missions.start((line) => toast(line, 6));
+        missions.start(say);
         if (missions.active && missions.active.def.id === 'getaway') police.setStars(3);
       }
+    }
+    const weaponKey = input.takeWeapon();
+    if (weaponKey > 0) {
+      const result = combat.select(weaponKey - 1, missions.index);
+      if (result === 'locked') toast('That weapon unlocks later in the story.', 2);
+      else if (result === true) toast(`${combat.current().name} ready.`, 1);
+    }
+    if (input.takeRadio()) {
+      state.radioIndex = (state.radioIndex + 1) % RADIO.length;
+      state.radioTimer = 0;
+      audio.stationBlip();
+      toast(`♪ ${RADIO[state.radioIndex]}`, 2);
     }
   } else if (state.mode === 'paused' && (actions & (ACTION_PAUSE | ACTION_ENTER))) {
     state.mode = 'playing';
@@ -242,6 +312,18 @@ function handleActions() {
 
 function update(dt) {
   state.time += dt;
+  // The bay clock: sunset keeps sliding toward night, day by day.
+  state.clockMinutes += dt * DAY_TUNING.minutesPerSecond;
+  if (state.clockMinutes >= 1440) {
+    state.clockMinutes -= 1440;
+    state.day += 1;
+  }
+  // The radio drifts to the next station on its own.
+  state.radioTimer += dt;
+  if (state.radioTimer > DAY_TUNING.radioCycleSeconds) {
+    state.radioTimer = 0;
+    state.radioIndex = (state.radioIndex + 1) % RADIO.length;
+  }
   const mouse = input.takeMouse();
   state.camYaw -= mouse.dx * 0.005;
   state.camPitch = Math.max(0.08, Math.min(0.9, state.camPitch + mouse.dy * 0.003));
@@ -266,7 +348,8 @@ function update(dt) {
     const result = driveCar(car, drive, dt, city.colliders, WORLD.bounds);
     speed = car.speed;
     if (result.crashed) {
-      state.health = Math.max(0, state.health - 4);
+      applyDamage(4);
+      damageCar(car, 3);
       audio.thud();
     }
     // Running over pedestrians is a crime; bumping traffic slows you down.
@@ -286,7 +369,8 @@ function update(dt) {
         const push = new THREE.Vector3().subVectors(car.group.position, other.group.position).normalize();
         car.group.position.addScaledVector(push, (3.6 - d) * 0.5);
         if (Math.abs(car.speed) > 14) {
-          state.health = Math.max(0, state.health - 3);
+          applyDamage(3);
+          damageCar(car, 2);
           audio.thud();
         }
         car.speed *= 0.55;
@@ -312,7 +396,7 @@ function update(dt) {
     // Traffic can clip Mara on the road.
     for (const car of traffic.cars) {
       if (car.group.position.distanceTo(mara.group.position) < 2.2) {
-        state.health = Math.max(0, state.health - 12);
+        applyDamage(12);
         mara.group.position.addScaledVector(
           new THREE.Vector3().subVectors(mara.group.position, car.group.position).normalize(),
           2.5,
@@ -334,18 +418,30 @@ function update(dt) {
     (kind) => {
       if (kind === 'ram' && state.time - state.lastRam > 1.2) {
         state.lastRam = state.time;
-        state.health = Math.max(0, state.health - WANTED_TUNING.policeRamDamage);
+        applyDamage(WANTED_TUNING.policeRamDamage);
         audio.thud();
         toast('The cops rammed you!', 2);
       }
     },
   );
 
+  // The air unit announces itself once, the first time it is up.
+  if (police.heli && !state.airWarned) {
+    state.airWarned = true;
+    toast('AIR UNIT DEPLOYED — Air One has you in the light.', 4);
+    hud.showDialogue('Capt. Drew', 'CD', 'Air One has you in the light, Voss. Give it up.', 5);
+  } else if (!police.heli) {
+    state.airWarned = false;
+  }
+
   // Missions.
   if (missions.active) {
-    const event = missions.update(dt, playerPos(), !!state.currentCar, state.currentCar, police.stars, (line) => toast(line, 6));
+    const event = missions.update(dt, playerPos(), !!state.currentCar, state.currentCar, police.stars, say);
     if (event && event.completed) {
       state.cash += event.reward;
+      state.respect = Math.min(100, state.respect + 25);
+      state.armour = Math.min(100, state.armour + 25);
+      combat.refill();
       audio.jingle();
       saveProgress();
       if (missions.done) {
@@ -411,15 +507,31 @@ function update(dt) {
     wanted: police.stars,
     cash: state.cash,
     health: state.health,
+    armour: state.armour,
+    respect: state.respect,
     speed,
     inCar: !!state.currentCar,
-    objective: missions.objectiveText(),
+    mission: missions.panel(),
     playerX: playerPos().x,
     playerZ: playerPos().z,
     heading: playerHeading(),
     missionTarget: missions.active && missions.active.target ? missions.active.target : null,
-    policeDots: police.cruisers.map((c) => ({ x: c.group.position.x, z: c.group.position.z })),
+    policeDots: police.cruisers.map((c) => ({ x: c.group.position.x, z: c.group.position.z, disabled: c.disabled > 0 })),
     trafficDots: traffic.cars.map((c) => ({ x: c.group.position.x, z: c.group.position.z })),
+    heliDot: police.heli ? { x: police.heli.group.position.x, z: police.heli.group.position.z } : null,
+    dispatch: police.dispatch(playerPos()),
+    heliActive: !!police.heli,
+    weapons: combat.weapons.map((w, i) => ({
+      name: w.name,
+      ammo: w.ammo,
+      locked: !combat.unlocked(i, missions.index),
+      selected: i === combat.selected,
+    })),
+    radio: RADIO[state.radioIndex],
+    car: state.currentCar ? { name: state.currentCar.modelName, condition: state.currentCar.condition } : null,
+    day: state.day,
+    clockMinutes: state.clockMinutes,
+    time: state.time,
   });
 
   // Playtest + screenshot hook: the live state, read by the test script.
@@ -428,15 +540,24 @@ function update(dt) {
     wanted: police.stars,
     cash: state.cash,
     health: state.health,
+    armour: state.armour,
+    respect: state.respect,
+    day: state.day,
+    clockMinutes: state.clockMinutes,
     inCar: !!state.currentCar,
     speed,
     playerX: playerPos().x,
     playerZ: playerPos().z,
     missionIndex: missions.index,
     missionActive: !!missions.active,
+    missionPanel: missions.panel(),
     objective: missions.objectiveText(),
     policeCars: police.cruisers.length,
     policePositions: police.cruisers.map((c) => ({ x: c.group.position.x, z: c.group.position.z })),
+    bustTimer: police.bustTimer,
+    heliActive: !!police.heli,
+    dispatch: police.dispatch(playerPos()).length,
+    weapons: combat.weapons.map((w) => ({ name: w.name, ammo: w.ammo })),
     trafficCars: traffic.cars.length,
     pedestrians: traffic.peds.length,
     pedPositions: traffic.peds.map((p) => ({ x: p.group.position.x, z: p.group.position.z, down: p.down })),
@@ -458,12 +579,21 @@ window.__solmarDebug = {
   },
   startMission() {
     if (!missions.active && missions.currentDef()) {
-      missions.start((line) => toast(line, 6));
+      missions.start(say);
       if (missions.active && missions.active.def.id === 'getaway') police.setStars(3);
     }
   },
   setWanted(n) {
     police.setStars(n);
+  },
+  setCash(n) {
+    state.cash = n;
+  },
+  setDay(n) {
+    state.day = n;
+  },
+  giveAmmo() {
+    combat.refill();
   },
 };
 
@@ -542,6 +672,9 @@ if (shotName) {
     traffic,
     police,
     missions,
+    combat,
+    hud,
+    say,
     camera,
     renderer,
     scene,
@@ -552,7 +685,11 @@ if (shotName) {
   showScreen(null);
   // About 1.5 seconds of live play at 60 fps: enough for traffic, police
   // and the camera to settle, quick enough to stage in a slow headless run.
-  const SHOT_FRAMES = state.shotFrames || 90;
+  // Headless Chromium renders through SwiftShader at well under 60 fps, so
+  // a shot's frame budget is measured in frames of game time, not wall
+  // seconds: 60 frames is a full second of traffic, police and camera
+  // settling, and still finishes in a reasonable wall-clock time.
+  const SHOT_FRAMES = state.shotFrames || 60;
   let frames = 0;
   const shotFrame = (now) => {
     requestAnimationFrame(shotFrame);

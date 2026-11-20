@@ -16,29 +16,78 @@ html, body {
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 #top-left { position: absolute; top: 14px; left: 16px; }
 #cash { font-size: 30px; font-weight: 800; color: #7de8a8; text-shadow: 0 2px 6px rgba(0,0,0,.7); }
-#health { width: 180px; height: 10px; margin-top: 6px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.35); border-radius: 5px; overflow: hidden; }
+.bar-label { font-size: 10px; letter-spacing: 2px; color: rgba(255,255,255,.65); margin-top: 6px; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+#health, #armour, #respect { width: 180px; height: 10px; margin-top: 2px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.35); border-radius: 5px; overflow: hidden; }
+#armour, #respect { height: 8px; }
 #health-fill { height: 100%; width: 100%; background: #37e08a; transition: width .2s; }
 #health-fill.low { background: #ff5040; }
-#stars { position: absolute; top: 10px; right: 18px; font-size: 30px; letter-spacing: 4px; color: rgba(255,255,255,.5); text-shadow: 0 2px 8px rgba(0,0,0,.8); }
+#armour-fill { height: 100%; width: 0; background: #7ab8e8; transition: width .2s; }
+#respect-fill { height: 100%; width: 0; background: #e8a0ff; transition: width .2s; }
+#top-right { position: absolute; top: 10px; right: 18px; text-align: right; }
+#stars { font-size: 30px; letter-spacing: 4px; color: rgba(255,255,255,.5); text-shadow: 0 2px 8px rgba(0,0,0,.8); }
 #stars.hot { color: #ffd23a; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .55; } }
-#objective {
+#air-unit { font-size: 13px; font-weight: 800; letter-spacing: 2px; color: #ff6a5a; margin-top: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.8); animation: pulse 1s infinite; }
+#day-clock { font-size: 14px; font-weight: 700; color: #ffe9a8; margin-top: 4px; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+#mission {
   position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-  max-width: 46%; padding: 8px 16px; text-align: center; font-size: 15px; font-weight: 600;
+  width: 420px; padding: 10px 16px; text-align: left;
   background: rgba(10, 14, 24, .62); border: 1px solid rgba(255, 210, 58, .55); border-radius: 8px;
 }
+#mission-title { font-size: 15px; font-weight: 800; letter-spacing: 1px; color: #ffd23a; }
+#mission-stage { font-size: 12px; color: #ffe9a8; letter-spacing: 1px; margin-top: 2px; }
+#mission-next { font-size: 13px; color: #f2ede4; margin-top: 4px; }
+#mission-timer { font-size: 14px; font-weight: 800; color: #ff8a5a; margin-top: 4px; }
+#dispatch {
+  position: absolute; left: 16px; top: 196px; width: 212px; padding: 8px 10px;
+  background: rgba(10, 14, 24, .66); border: 1px solid rgba(120, 160, 255, .5); border-radius: 8px;
+}
+#dispatch-title { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: #8ab8ff; margin-bottom: 4px; }
+.dispatch-row { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; padding: 3px 0; border-top: 1px solid rgba(255,255,255,.08); }
+.dispatch-row .unit { font-weight: 700; color: #fff; }
+.dispatch-row .role { color: #ffb0a0; }
+.dispatch-row .dist { color: #ffe9a8; }
+.dispatch-row.disabled .unit { color: #888; text-decoration: line-through; }
+.dispatch-empty { font-size: 12px; color: rgba(255,255,255,.6); }
+#weapons { position: absolute; right: 18px; top: 150px; display: flex; flex-direction: column; gap: 6px; }
+.weapon-slot { width: 158px; padding: 6px 8px; background: rgba(10, 14, 24, .66); border: 1px solid rgba(255,255,255,.3); border-radius: 6px; font-size: 12px; }
+.weapon-slot.selected { border-color: #ffd23a; background: rgba(60, 44, 10, .8); }
+.weapon-slot.locked { opacity: .5; }
+.weapon-slot .w-key { display: inline-block; width: 16px; font-weight: 800; color: #ffe9a8; }
+.weapon-slot .w-name { font-weight: 800; letter-spacing: 1px; }
+.weapon-slot .w-ammo { float: right; color: #ffe9a8; font-weight: 700; }
+#dialogue {
+  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%);
+  display: flex; gap: 12px; align-items: center; max-width: 560px; padding: 10px 16px;
+  background: rgba(10, 14, 24, .82); border: 1px solid rgba(255, 180, 90, .5); border-radius: 10px;
+  opacity: 0; transition: opacity .3s;
+}
+#dialogue.show { opacity: 1; }
+#dialogue-avatar {
+  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(180deg, #ff9a3c, #d8382c);
+  display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; color: #fff;
+}
+#dialogue-name { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: #ffc46a; }
+#dialogue-line { font-size: 14px; line-height: 1.4; }
 #toast {
-  position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%);
   max-width: 60%; padding: 10px 18px; text-align: center; font-size: 16px;
   background: rgba(10, 14, 24, .78); border-radius: 8px; opacity: 0; transition: opacity .3s;
 }
 #toast.show { opacity: 1; }
 #minimap {
-  position: absolute; left: 16px; bottom: 16px; width: 150px; height: 150px;
-  border: 2px solid rgba(255,255,255,.5); border-radius: 8px; background: #101826;
+  position: absolute; left: 16px; bottom: 16px; width: 200px; height: 200px;
+  border: 3px solid rgba(255,255,255,.6); border-radius: 50%; background: #1d3247;
   box-shadow: 0 4px 18px rgba(0,0,0,.5);
 }
+#location-line { position: absolute; left: 16px; bottom: 228px; font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #ffe9a8; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+#car-info { position: absolute; right: 20px; bottom: 96px; text-align: right; }
+#car-name { font-size: 16px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+#car-condition { width: 180px; height: 8px; margin-top: 4px; margin-left: auto; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.35); border-radius: 4px; overflow: hidden; }
+#car-condition-fill { height: 100%; background: #ffd23a; }
 #speed { position: absolute; right: 20px; bottom: 48px; font-size: 26px; font-weight: 800; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+#radio-line { position: absolute; right: 20px; bottom: 142px; font-size: 13px; color: #ffd98a; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
 #hint { position: absolute; right: 20px; bottom: 16px; font-size: 12px; color: rgba(255,255,255,.75); text-shadow: 0 1px 4px rgba(0,0,0,.8); }
 
 /* ---- Screens ---- */

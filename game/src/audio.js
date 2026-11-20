@@ -147,4 +147,31 @@ export class AudioEngine {
     osc.start();
     osc.stop(this.context.currentTime + 0.3);
   }
+
+  // Two quick notes when the radio station changes.
+  stationBlip() {
+    this.tap(660, 0.08, 0.07);
+    setTimeout(() => this.tap(880, 0.08, 0.1), 70);
+  }
+
+  // A gunshot: a burst of filtered noise, heavier for the shotgun.
+  shot(weaponId) {
+    if (!this.context) return;
+    const heavy = weaponId === 'shotgun';
+    const len = this.context.sampleRate * (heavy ? 0.22 : 0.09);
+    const buffer = this.context.createBuffer(1, len, this.context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < len; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = this.context.createBufferSource();
+    src.buffer = buffer;
+    const filter = this.context.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = heavy ? 900 : 1800;
+    const g = this.context.createGain();
+    g.gain.value = heavy ? 0.5 : 0.3;
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(this.master);
+    src.start();
+  }
 }

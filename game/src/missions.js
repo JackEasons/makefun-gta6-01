@@ -4,6 +4,9 @@
 //   1. The Pickup — walk or drive to the pier and grab the package.
 //   2. Hot Wheels — steal the gold coupe on Marina Row, deliver it to the garage.
 //   3. The Long Way Home — the law is on you; lose them all to finish the story.
+// Every job is staged (Hot Wheels has two stages), and the last one runs on
+// a three-minute clock: take too long and the job is off, though Tab starts
+// it again. panel() is what the HUD's mission panel reads.
 
 import * as THREE from 'three';
 import { MISSIONS } from './config.js';
@@ -14,6 +17,8 @@ export class MissionManager {
     this.places = places;
     this.index = 0; // next mission to start
     this.active = null; // { def, stage, target: Vector3 }
+    this.stageIndex = 0; // stage inside the active job
+    this.timer = null; // seconds left on a timed job, null when untimed
     this.done = false;
     this.beacon = this.makeBeacon();
     this.beacon.visible = false;
@@ -76,6 +81,30 @@ export class MissionManager {
     return MISSIONS[this.index] ?? null;
   }
 
+  // The mission panel's four lines: job, stage, next step, and the clock.
+  panel() {
+    if (this.done) {
+      return { job: 'STORY COMPLETE', stage: '', next: 'Free roam — Solmar Bay is yours.', timer: null };
+    }
+    if (!this.active) {
+      const def = this.currentDef();
+      if (!def) return { job: 'STORY COMPLETE', stage: '', next: '', timer: null };
+      return {
+        job: `JOB ${this.index + 1}/${MISSIONS.length} · ${def.title.toUpperCase()}`,
+        stage: 'READY',
+        next: 'Press Tab to start the next job.',
+        timer: null,
+      };
+    }
+    const def = this.active.def;
+    return {
+      job: `JOB ${this.index + 1}/${MISSIONS.length} · ${def.title.toUpperCase()}`,
+      stage: `STAGE ${this.stageIndex + 1}/${def.stages.length}`,
+      next: def.stages[this.stageIndex],
+      timer: this.timer,
+    };
+  }
+
   start(onMessage) {
     const def = this.currentDef();
     if (!def || this.active) return null;
@@ -88,6 +117,8 @@ export class MissionManager {
     } else if (def.id === 'getaway') {
       this.active = { def, stage: 'lose', target: null };
     }
+    this.stageIndex = 0;
+    this.timer = def.timeLimit ?? null;
     this.beacon.visible = true;
     this.moveBeacon();
     onMessage(def.intro);
@@ -118,6 +149,18 @@ export class MissionManager {
     this.beacon.userData.diamond.position.y = 6 + Math.sin(performance.now() / 400) * 0.4;
     this.beacon.userData.ring.scale.setScalar(1 + Math.sin(performance.now() / 300) * 0.08);
 
+    // A timed job: the clock runs out and the job is off — Tab retries it.
+    if (this.timer !== null) {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        this.timer = null;
+        this.active = null;
+        this.beacon.visible = false;
+        onMessage('Silas: "Too slow — the job is off. Press Tab to try it again."');
+        return 'failed';
+      }
+    }
+
     if (def.id === 'pickup') {
       if (playerPos.distanceTo(this.active.target) < 3) {
         this.package.visible = false;
@@ -126,6 +169,7 @@ export class MissionManager {
     } else if (def.id === 'hotwheels') {
       if (this.active.stage === 'steal' && inCar && car && car.stolen && car.style === 'coupe') {
         this.active.stage = 'deliver';
+        this.stageIndex = 1;
         this.active.target = new THREE.Vector3(this.places.garage.x, 0, this.places.garage.z);
         this.moveBeacon();
         onMessage('Silas: "That is the one. Bring it to the garage on the west side."');
@@ -145,6 +189,8 @@ export class MissionManager {
   complete(onMessage, line) {
     const reward = this.active.def.reward;
     this.active = null;
+    this.stageIndex = 0;
+    this.timer = null;
     this.beacon.visible = false;
     this.index += 1;
     if (this.index >= MISSIONS.length) this.done = true;

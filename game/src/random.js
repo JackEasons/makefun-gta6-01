@@ -33,6 +33,11 @@ export function pick(rng, list) {
   return list[Math.floor(rng() * list.length)];
 }
 
+// A one-in-p chance, for the little dice rolls scattered through the game.
+export function chance(rng, p) {
+  return rng() < p;
+}
+
 export function shuffle(rng, list) {
   const out = list.slice();
   for (let i = out.length - 1; i > 0; i -= 1) {

@@ -88,13 +88,13 @@ export function buildCity(scene, seed) {
   // Sky, haze and the low sun.
   scene.background = new THREE.Color(PALETTE.skyHorizon);
   scene.fog = new THREE.Fog(PALETTE.fog, 90, 420);
-  const hemi = new THREE.HemisphereLight(0xffd9b0, 0x4a3a5a, 0.95);
+  const hemi = new THREE.HemisphereLight(0xffd9b0, 0x4a3a5a, 1.1);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(PALETTE.sun, 1.6);
+  const sun = new THREE.DirectionalLight(PALETTE.sun, 1.9);
   sun.position.set(-120, 55, 160);
   scene.add(sun);
   const sunDisc = new THREE.Mesh(
-    new THREE.CircleGeometry(22, 32),
+    new THREE.CircleGeometry(26, 32),
     new THREE.MeshBasicMaterial({ color: 0xffe9a8, fog: false }),
   );
   sunDisc.position.set(-160, 34, 330);
@@ -106,7 +106,7 @@ export function buildCity(scene, seed) {
   // Ground: one big slab, then the beach and the sea on the south edge.
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(half * 2 + 60, half * 2 + WORLD.sandDepth + WORLD.waterDepth + 60),
-    new THREE.MeshLambertMaterial({ color: 0x6a7a5a }),
+    new THREE.MeshLambertMaterial({ color: 0x7d8f66 }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(0, -0.05, (WORLD.sandDepth + WORLD.waterDepth) / 2 - 30);
@@ -192,7 +192,7 @@ export function buildCity(scene, seed) {
       for (let s = 0; s < slots; s += 1) {
         const w = tall ? WORLD.blockSize * 0.8 : WORLD.blockSize * 0.38;
         const d = tall ? WORLD.blockSize * 0.8 : WORLD.blockSize * 0.38;
-        const h = tall ? range(rng, 26, 58) : range(rng, 9, 20);
+        const h = tall ? range(rng, 30, 68) : range(rng, 9, 20);
         const ox = slots === 1 ? 0 : (s % 2 === 0 ? -1 : 1) * WORLD.blockSize * 0.24;
         const oz = slots === 1 ? 0 : (s < 2 ? -1 : 1) * WORLD.blockSize * 0.24;
         const color = pick(rng, PALETTE.building);
@@ -200,7 +200,7 @@ export function buildCity(scene, seed) {
           map: facadeFor(color),
           emissive: 0xffffff,
           emissiveMap: facadeFor(color),
-          emissiveIntensity: 0.18,
+          emissiveIntensity: 0.32,
         });
         const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
         box.position.set(cx + ox, h / 2, cz + oz);
@@ -235,11 +235,27 @@ export function buildCity(scene, seed) {
       scene.add(lamp);
     }
   }
-  // A palm row on the beach.
-  for (let x = -half + 20; x < half - 10; x += 30) {
+  // A palm row on the beach, plus bright umbrellas on the sand.
+  for (let x = -half + 20; x < half - 10; x += 22) {
     const palm = makePalm(rng);
     palm.position.set(x, 0, WORLD.beachStart + 8);
     scene.add(palm);
+  }
+  const umbrellaColors = [0xff6a8a, 0xffd23a, 0x37e08a, 0x6aa8e8, 0xff9a3c];
+  for (let i = 0; i < 7; i += 1) {
+    const ux = -half + 40 + i * 62 + range(rng, -8, 8);
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.07, 2.4, 6),
+      new THREE.MeshLambertMaterial({ color: 0xe8e2d4 }),
+    );
+    pole.position.set(ux, 1.2, WORLD.beachStart + 26);
+    scene.add(pole);
+    const canopy = new THREE.Mesh(
+      new THREE.ConeGeometry(2.2, 0.9, 8),
+      new THREE.MeshLambertMaterial({ color: umbrellaColors[i % umbrellaColors.length] }),
+    );
+    canopy.position.set(ux, 2.8, WORLD.beachStart + 26);
+    scene.add(canopy);
   }
 
   // Named places the missions point at.
