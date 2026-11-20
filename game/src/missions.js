@@ -164,7 +164,7 @@ export class MissionManager {
     if (def.id === 'pickup') {
       if (playerPos.distanceTo(this.active.target) < 3) {
         this.package.visible = false;
-        return this.complete(onMessage, 'Package secured. Silas is pleased — $500.');
+        return this.complete(onMessage, 'Package secured. Silas is pleased — $600.');
       }
     } else if (def.id === 'hotwheels') {
       if (this.active.stage === 'steal' && inCar && car && car.stolen && car.style === 'coupe') {

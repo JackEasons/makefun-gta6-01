@@ -56,8 +56,8 @@ export function stageShot(name, ctx) {
 
   if (name === 'cover') {
     // A police chase, nine days in: Mara in the red sedan with the gold
-    // coupe's job on its second stage, four stars, the air unit overhead,
-    // three cruisers in frame and traffic on the boulevard. The camera sits
+    // coupe's job on its second stage, five stars, the air unit overhead,
+    // four cruisers in frame and traffic on the boulevard. The camera sits
     // at a three-quarter rear angle so the cruisers behind her read.
     stageMidGame(ctx, 12450, 9, 1120, 50, 55, 72);
     const car = placePlayerInCar(ctx, 0, Math.PI / 2);
@@ -80,14 +80,14 @@ export function stageShot(name, ctx) {
     missions.active.target = new THREE.Vector3(missions.places.garage.x, 0, missions.places.garage.z);
     missions.moveBeacon();
     ctx.say('Silas: "That is the one. Bring it to the garage on the west side."');
-    placeCruisersBehind(ctx, car, 4);
+    placeCruisersBehind(ctx, car, 5);
     // Cruisers placed for the camera, not just the chase logic: one head-on
     // in the far lane (the law coming at her), one on her left flank just
     // ahead, one on her right a little further up. The chase AI takes over
     // from here, so a ram or two on the way to the frame is part of the shot.
     const fwd = new THREE.Vector3(Math.sin(car.heading), 0, Math.cos(car.heading));
     const side = new THREE.Vector3(Math.cos(car.heading), 0, -Math.sin(car.heading));
-    const [c0, c1, c2] = ctx.police.cruisers;
+    const [c0, c1, c2, c3] = ctx.police.cruisers;
     c0.group.position.copy(car.group.position).addScaledVector(fwd, 42).addScaledVector(side, -4.4);
     c0.heading = car.heading + Math.PI;
     c0.group.rotation.y = c0.heading;
@@ -97,6 +97,11 @@ export function stageShot(name, ctx) {
     c2.group.position.copy(car.group.position).addScaledVector(fwd, 24).addScaledVector(side, 4.5);
     c2.heading = car.heading;
     c2.group.rotation.y = c2.heading;
+    // Fourth cruiser, five stars: on the left flank between the near
+    // cruiser and the head-on one, so the chase reads four-wide.
+    c3.group.position.copy(car.group.position).addScaledVector(fwd, 30).addScaledVector(side, -5.5);
+    c3.heading = car.heading;
+    c3.group.rotation.y = c3.heading;
     // The air unit hangs ahead and to the left, in the frame with her: a
     // wide orbit (36m) and a low hover (16m) keep it inside the camera's
     // vertical field instead of vanishing above the top of the frame. The
@@ -116,6 +121,14 @@ export function stageShot(name, ctx) {
     traffic.cars[2].heading = Math.PI / 2;
     traffic.cars[3].group.position.set(-100, 0, 25.6);
     traffic.cars[3].heading = -Math.PI / 2;
+    // Round 3: more life in the frame — two more cars on the far side of
+    // the boulevard and two pedestrians on the near sidewalk.
+    traffic.cars[4].group.position.set(45, 0, 25.6);
+    traffic.cars[4].heading = -Math.PI / 2;
+    traffic.cars[5].group.position.set(10, 0, 25.6);
+    traffic.cars[5].heading = -Math.PI / 2;
+    traffic.peds[4].group.position.set(-45, 0, 38.5);
+    traffic.peds[5].group.position.set(-75, 0, 21.5);
     return;
   }
 

@@ -46,12 +46,24 @@ const dossier = buildDossier(out, {
 });
 writeFileSync(join(out, 'dossier.json'), dossier);
 
+// Round 3: refuse to hand in a dossier the gate would refuse — a shot
+// over the 256 KiB cap fails the whole entry, so catch it here.
+for (const n of readdirSync(join(out, 'screenshots')).filter((x) => !x.startsWith('.'))) {
+  const bytes = statSync(join(out, 'screenshots', n)).size;
+  if (bytes > 262144) throw new Error(`screenshot ${n} is ${bytes} bytes, over the 256 KiB cap`);
+}
+
 // A short build summary on stdout, so a human running it sees what went in.
 // Screenshot sizes are printed too: the gate caps each one at 256 KiB, and
 // a size here that creeps over the cap is the first thing to catch. The
 // biggest game file is printed as well: the dossier shows sources up to its
 // 160 KiB text cap, so a file that grows past it is worth knowing about.
 const shotNames = readdirSync(join(out, 'screenshots')).filter((n) => !n.startsWith('.'));
+// The gate wants 3 or 4 screenshots: fewer shows too little of the game,
+// more is refused outright.
+if (shotNames.length < 3 || shotNames.length > 4) {
+  throw new Error(`expected 3 or 4 screenshots, found ${shotNames.length}`);
+}
 const shotSizes = shotNames
   .map((n) => `${n} ${Math.round(statSync(join(out, 'screenshots', n)).size / 1024)} KiB`)
   .join(', ');

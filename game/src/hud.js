@@ -37,6 +37,9 @@ export class Hud {
     this.dialogueName = document.getElementById('dialogue-name');
     this.dialogueLine = document.getElementById('dialogue-line');
     this.hintEl = document.getElementById('hint');
+    this.navEl = document.getElementById('nav');
+    this.navArrow = document.getElementById('nav-arrow');
+    this.navText = document.getElementById('nav-text');
     this.map = document.getElementById('minimap');
     this.mapCtx = this.map.getContext('2d');
     this.toastTimer = 0;
@@ -112,6 +115,7 @@ export class Hud {
       this.missionTimer.textContent = '';
     }
     this.drawDispatch(state.dispatch);
+    this.drawNav(state);
     this.drawWeapons(state.weapons);
     this.hintEl.textContent = state.inCar
       ? 'W A S D drive · E exit car · 1-4 weapons · R radio · P pause · M mute'
@@ -152,6 +156,30 @@ export class Hud {
           `<span class="w-ammo">${s.locked ? 'LOCKED' : s.ammo === Infinity ? '∞' : s.ammo}</span></div>`,
       )
       .join('');
+  }
+
+  // The waypoint compass: a gold arrow that always points at the active
+  // job's target, with the next step and the distance in metres. The
+  // arrow turns with the camera, so up means straight ahead. No target
+  // (between jobs, or the getaway's "lose them" stage) hides it.
+  drawNav(state) {
+    const t = state.missionTarget;
+    if (!t) {
+      this.navEl.classList.add('hidden');
+      return;
+    }
+    this.navEl.classList.remove('hidden');
+    const dx = t.x - state.playerX;
+    const dz = t.z - state.playerZ;
+    const dist = Math.round(Math.hypot(dx, dz));
+    const bearing = Math.atan2(dx, dz);
+    const forward = state.camYaw + Math.PI;
+    let rel = bearing - forward;
+    while (rel > Math.PI) rel -= Math.PI * 2;
+    while (rel < -Math.PI) rel += Math.PI * 2;
+    // The glyph points right at rest; up is straight ahead, clockwise is right.
+    this.navArrow.style.transform = `rotate(${(-rel - Math.PI / 2).toFixed(3)}rad)`;
+    this.navText.textContent = `NEXT ▸ ${state.mission.next} · ${dist}m`;
   }
 
   drawMinimap(state) {

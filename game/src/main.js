@@ -515,6 +515,7 @@ function update(dt) {
     playerX: playerPos().x,
     playerZ: playerPos().z,
     heading: playerHeading(),
+    camYaw: state.camYaw,
     missionTarget: missions.active && missions.active.target ? missions.active.target : null,
     policeDots: police.cruisers.map((c) => ({ x: c.group.position.x, z: c.group.position.z, disabled: c.disabled > 0 })),
     trafficDots: traffic.cars.map((c) => ({ x: c.group.position.x, z: c.group.position.z })),
@@ -548,6 +549,10 @@ function update(dt) {
     speed,
     playerX: playerPos().x,
     playerZ: playerPos().z,
+    camYaw: state.camYaw,
+    navTarget: missions.active && missions.active.target
+      ? { x: missions.active.target.x, z: missions.active.target.z }
+      : null,
     missionIndex: missions.index,
     missionActive: !!missions.active,
     missionPanel: missions.panel(),

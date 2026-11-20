@@ -85,6 +85,9 @@ export class Police {
 
   update(dt, target, targetSpeed, onFoot, onCrime) {
     this.sinceCrime += dt;
+    // Out of sight, out of mind: with no cruiser close, the heat fades
+    // half again as fast, so a clean break really ends the chase.
+    if (this.stars > 0 && !this.nearestCruiser(target, 45)) this.sinceCrime += dt * 0.5;
     // Laying low: one star fades every decay window.
     if (this.stars > 0 && this.sinceCrime > WANTED_TUNING.decaySeconds) {
       this.stars -= 1;

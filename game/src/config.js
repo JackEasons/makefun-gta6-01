@@ -53,7 +53,7 @@ export const CAR_TUNING = {
 
 export const WANTED_TUNING = {
   maxStars: 5,
-  decaySeconds: 25, // no crime for this long drops one star
+  decaySeconds: 18, // no crime for this long drops one star
   stealCar: 1,
   hitPedestrian: 1,
   hitPolice: 1,
@@ -134,7 +134,7 @@ export const MISSIONS = [
     initials: 'SC',
     objective: 'Pick up the package at the pier',
     stages: ['Reach the pier and grab the package'],
-    reward: 500,
+    reward: 600,
   },
   {
     id: 'hotwheels',

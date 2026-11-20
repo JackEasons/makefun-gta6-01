@@ -259,7 +259,7 @@ export function buildCity(scene, seed) {
   }
 
   // Named places the missions point at.
-  places.pier = { x: 30, z: WORLD.beachStart + 26 };
+  places.pier = { x: 30, z: WORLD.beachStart + 14 };
   places.garage = { x: -150, z: 30 };
   places.safehouse = { x: -30, z: -30 };
   places.marinaRow = { x: 90, z: -90 };
