@@ -1,280 +1,254 @@
-// Solmar Bay — the HUD: wanted stars, cash, health, armour and respect,
-// the mission panel (job, stage, next step, clock), the police dispatch
-// panel (named units with live distances), weapon slots, a dialogue box
-// with a character avatar, the radio line, the car name and condition,
-// the district line, day and clock — and a live top-down minimap drawn on
-// a round canvas. All of it is DOM and 2D canvas over the 3D view, styled
-// by style.css. Every number comes from the live game state, never from a
-// static label: dispatch distances track the real cruisers, the mission
-// panel reads the active job, the weapon slots read the real arsenal.
+// The HUD: every DOM panel, the waypoint compass, the dispatch rows, the
+// dialogue box, toasts, and the circular minimap drawn on a canvas.
+import { RADIO, WEAPONS, districtAt, heatWord, formatCash, formatClock, formatTimer } from './config.js';
+import { missionPanel } from './missions.js';
+import { dispatchRows } from './police.js';
 
-import { WORLD, WANTED_TUNING, districtAt, heatText } from './config.js';
+const $ = (id) => document.getElementById(id);
 
-export class Hud {
-  constructor() {
-    this.starsEl = document.getElementById('stars');
-    this.airEl = document.getElementById('air-unit');
-    this.dayEl = document.getElementById('day-clock');
-    this.cashEl = document.getElementById('cash');
-    this.healthFill = document.getElementById('health-fill');
-    this.armourFill = document.getElementById('armour-fill');
-    this.respectFill = document.getElementById('respect-fill');
-    this.speedEl = document.getElementById('speed');
-    this.radioEl = document.getElementById('radio-line');
-    this.carInfoEl = document.getElementById('car-info');
-    this.carNameEl = document.getElementById('car-name');
-    this.carCondFill = document.getElementById('car-condition-fill');
-    this.locationEl = document.getElementById('location-line');
-    this.missionTitle = document.getElementById('mission-title');
-    this.missionStage = document.getElementById('mission-stage');
-    this.missionNext = document.getElementById('mission-next');
-    this.missionTimer = document.getElementById('mission-timer');
-    this.dispatchRows = document.getElementById('dispatch-rows');
-    this.weaponsEl = document.getElementById('weapons');
-    this.toastEl = document.getElementById('toast');
-    this.dialogueEl = document.getElementById('dialogue');
-    this.dialogueAvatar = document.getElementById('dialogue-avatar');
-    this.dialogueName = document.getElementById('dialogue-name');
-    this.dialogueLine = document.getElementById('dialogue-line');
-    this.hintEl = document.getElementById('hint');
-    this.navEl = document.getElementById('nav');
-    this.navArrow = document.getElementById('nav-arrow');
-    this.navText = document.getElementById('nav-text');
-    this.map = document.getElementById('minimap');
-    this.mapCtx = this.map.getContext('2d');
-    this.toastTimer = 0;
-    this.dialogueTimer = 0;
-    this.lastDispatch = '';
-    this.lastWeapons = '';
+export function createHud(G) {
+  const hud = {
+    dialogueUntil: 0,
+    toastUntil: 0,
+    mapTimer: 0,
+    slots: [],
+  };
+
+  // Weapon slots are built once; their contents are rewritten each frame.
+  const weaponsEl = $('weapons');
+  for (let i = 0; i < 4; i += 1) {
+    const slot = document.createElement('div');
+    slot.className = 'weapon-slot';
+    slot.innerHTML =
+      '<span class="w-key">' + (i + 1) + '</span>' +
+      '<span class="w-name">' + WEAPONS[i].name + '</span>' +
+      '<span class="w-ammo"></span>';
+    weaponsEl.appendChild(slot);
+    hud.slots.push(slot);
   }
 
-  showToast(text, seconds = 4) {
-    this.toastEl.textContent = text;
-    this.toastEl.classList.add('show');
-    this.toastTimer = seconds;
+  hud.showDialogue = function showDialogue(name, initials, line, seconds) {
+    $('dialogue-avatar').textContent = initials;
+    $('dialogue-name').textContent = name;
+    $('dialogue-line').textContent = line;
+    $('dialogue').classList.add('show');
+    hud.dialogueUntil = G.time + (seconds || 7);
+  };
+
+  hud.hideDialogue = function hideDialogue() {
+    $('dialogue').classList.remove('show');
+  };
+
+  hud.toast = function toast(text) {
+    const el = $('toast');
+    el.textContent = text;
+    el.classList.remove('hidden');
+    hud.toastUntil = G.time + 3;
+  };
+
+  hud.setStatus = function setStatus(text) {
+    $('status').textContent = text;
+  };
+
+  function updateStars() {
+    const wanted = G.police.wanted;
+    let html = '';
+    for (let i = 0; i < 5; i += 1) {
+      html += i < wanted ? '★' : '<span class="off">☆</span>';
+    }
+    $('stars').innerHTML = html;
   }
 
-  // A line of story dialogue, with the speaker's initials as the avatar.
-  showDialogue(speaker, initials, line, seconds = 6) {
-    this.dialogueAvatar.textContent = initials;
-    this.dialogueName.textContent = speaker;
-    this.dialogueLine.textContent = line;
-    this.dialogueEl.classList.add('show');
-    this.dialogueTimer = seconds;
-  }
-
-  update(dt, state) {
-    if (this.toastTimer > 0) {
-      this.toastTimer -= dt;
-      if (this.toastTimer <= 0) this.toastEl.classList.remove('show');
-    }
-    if (this.dialogueTimer > 0) {
-      this.dialogueTimer -= dt;
-      if (this.dialogueTimer <= 0) this.dialogueEl.classList.remove('show');
-    }
-    // Wanted stars and the air unit flag.
-    let stars = '';
-    for (let i = 0; i < WANTED_TUNING.maxStars; i += 1) {
-      stars += i < state.wanted ? '★' : '☆';
-    }
-    this.starsEl.textContent = stars;
-    this.starsEl.classList.toggle('hot', state.wanted > 0);
-    this.airEl.classList.toggle('hidden', !state.heliActive);
-    // Day and clock.
-    const hh = String(Math.floor(state.clockMinutes / 60)).padStart(2, '0');
-    const mm = String(Math.floor(state.clockMinutes % 60)).padStart(2, '0');
-    this.dayEl.textContent = `DAY ${state.day} · ${hh}:${mm}`;
-    // Cash, health, armour, respect.
-    this.cashEl.textContent = `$${state.cash.toLocaleString('en-US')}`;
-    this.healthFill.style.width = `${Math.max(0, state.health)}%`;
-    this.healthFill.classList.toggle('low', state.health < 30);
-    this.armourFill.style.width = `${Math.max(0, state.armour)}%`;
-    this.respectFill.style.width = `${Math.max(0, state.respect)}%`;
-    // Speed, radio and the car being driven.
-    this.speedEl.textContent = state.inCar ? `${Math.round(Math.abs(state.speed) * 3.6)} km/h` : '';
-    this.radioEl.textContent = state.inCar ? `♪ ${state.radio}` : '';
-    if (state.car) {
-      this.carInfoEl.classList.remove('hidden');
-      this.carNameEl.textContent = `${state.car.name} · ${Math.round(state.car.condition)}%`;
-      this.carCondFill.style.width = `${Math.max(0, state.car.condition)}%`;
-    } else {
-      this.carInfoEl.classList.add('hidden');
-    }
-    // Where Mara is, and how hot the bay is there.
-    this.locationEl.textContent = `${districtAt(state.playerX, state.playerZ)} · ${heatText(state.wanted)}`;
-    // The mission panel: job, stage, next step, and the job clock.
-    this.missionTitle.textContent = state.mission.job;
-    this.missionStage.textContent = state.mission.stage;
-    this.missionNext.textContent = state.mission.next;
-    if (state.mission.timer !== null && state.mission.timer !== undefined) {
-      const t = Math.max(0, state.mission.timer);
-      const tm = Math.floor(t / 60);
-      const ts = String(Math.floor(t % 60)).padStart(2, '0');
-      this.missionTimer.textContent = `TIME ${tm}:${ts}`;
-    } else {
-      this.missionTimer.textContent = '';
-    }
-    this.drawDispatch(state.dispatch);
-    this.drawNav(state);
-    this.drawWeapons(state.weapons);
-    this.hintEl.textContent = state.inCar
-      ? 'W A S D drive · E exit car · 1-4 weapons · R radio · P pause · M mute'
-      : 'W A S D move · Shift run · E enter car · F punch / fire · 1-4 weapons · Tab next job · P pause';
-    this.drawMinimap(state);
-  }
-
-  // Rebuilt only when the units or their distances change, so the DOM is
-  // not rewritten sixty times a second.
-  drawDispatch(rows) {
-    const signature = rows.map((r) => `${r.callsign}:${r.role}:${r.dist}:${r.disabled ? 1 : 0}`).join('|');
-    if (signature === this.lastDispatch) return;
-    this.lastDispatch = signature;
-    if (rows.length === 0) {
-      this.dispatchRows.innerHTML = '<div class="dispatch-empty">NO UNITS DEPLOYED — THE BAY IS QUIET</div>';
+  function updateNav() {
+    const nav = $('nav');
+    const target = G.missions.target;
+    if (!target) {
+      nav.classList.add('hidden');
       return;
     }
-    this.dispatchRows.innerHTML = rows
-      .map(
-        (r) =>
-          `<div class="dispatch-row${r.disabled ? ' disabled' : ''}">` +
-          `<span class="unit">${r.callsign}</span><span class="role">${r.role}</span>` +
-          `<span class="dist">${r.dist}m</span></div>`,
-      )
-      .join('');
-  }
-
-  // Weapon slots 1-4: name, ammo or LOCKED, and which one is selected.
-  drawWeapons(slots) {
-    const signature = slots.map((s) => `${s.name}:${s.ammo}:${s.locked ? 1 : 0}:${s.selected ? 1 : 0}`).join('|');
-    if (signature === this.lastWeapons) return;
-    this.lastWeapons = signature;
-    this.weaponsEl.innerHTML = slots
-      .map(
-        (s, i) =>
-          `<div class="weapon-slot${s.selected ? ' selected' : ''}${s.locked ? ' locked' : ''}">` +
-          `<span class="w-key">${i + 1}</span><span class="w-name">${s.name}</span>` +
-          `<span class="w-ammo">${s.locked ? 'LOCKED' : s.ammo === Infinity ? '∞' : s.ammo}</span></div>`,
-      )
-      .join('');
-  }
-
-  // The waypoint compass: a gold arrow that always points at the active
-  // job's target, with the next step and the distance in metres. The
-  // arrow turns with the camera, so up means straight ahead. No target
-  // (between jobs, or the getaway's "lose them" stage) hides it.
-  drawNav(state) {
-    const t = state.missionTarget;
-    if (!t) {
-      this.navEl.classList.add('hidden');
-      return;
-    }
-    this.navEl.classList.remove('hidden');
-    const dx = t.x - state.playerX;
-    const dz = t.z - state.playerZ;
-    const dist = Math.round(Math.hypot(dx, dz));
+    const dx = target.x - G.player.x;
+    const dz = target.z - G.player.z;
+    const dist = Math.hypot(dx, dz);
     const bearing = Math.atan2(dx, dz);
-    const forward = state.camYaw + Math.PI;
-    let rel = bearing - forward;
+    let rel = bearing - (G.camYaw + Math.PI);
     while (rel > Math.PI) rel -= Math.PI * 2;
     while (rel < -Math.PI) rel += Math.PI * 2;
-    // The glyph points right at rest; up is straight ahead, clockwise is right.
-    this.navArrow.style.transform = `rotate(${(-rel - Math.PI / 2).toFixed(3)}rad)`;
-    this.navText.textContent = `NEXT ▸ ${state.mission.next} · ${dist}m`;
+    const rotation = -rel - Math.PI / 2;
+    $('nav-arrow').style.transform = 'rotate(' + rotation + 'rad)';
+    $('nav-text').textContent =
+      'NEXT ▸ ' + missionPanel(G).next + ' · ' + Math.round(dist) + 'm';
+    nav.classList.remove('hidden');
   }
 
-  drawMinimap(state) {
-    const ctx = this.mapCtx;
-    const size = this.map.width;
-    const half = WORLD.bounds;
-    const toMap = (x, z) => [((x + half) / (half * 2)) * size, ((z + half) / (half * 2)) * size];
-    ctx.clearRect(0, 0, size, size);
-    // Bright bay chart: deep blue land, lighter water and sand.
-    ctx.fillStyle = '#1d3247';
-    ctx.fillRect(0, 0, size, size);
-    // Water and sand on the south edge.
-    const [, wy] = toMap(0, WORLD.waterStart);
-    ctx.fillStyle = '#2a86a8';
-    ctx.fillRect(0, wy, size, size - wy);
-    const [, sy] = toMap(0, WORLD.beachStart);
-    ctx.fillStyle = '#e8c98f';
-    ctx.fillRect(0, sy, size, wy - sy);
-    // Streets, wide and pale so the grid reads at a glance.
-    ctx.strokeStyle = '#9aa0aa';
-    ctx.lineWidth = 5;
-    const street = (c) => {
-      const [x] = toMap(c, 0);
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, size);
-      ctx.stroke();
-      const [, y] = toMap(0, c);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(size, y);
-      ctx.stroke();
-    };
-    for (let i = 0; i <= WORLD.blocks; i += 1) {
-      street(-WORLD.blocks * WORLD.pitch * 0.5 + i * WORLD.pitch);
+  function updateDispatch() {
+    const rows = dispatchRows(G);
+    const el = $('dispatch-rows');
+    let html = '';
+    for (const row of rows) {
+      html += '<div class="dispatch-row"><span class="d-name">' + row.name + '</span>' +
+        '<span class="d-role">' + row.role + '</span>' +
+        '<span class="d-dist">' + row.dist + 'm</span></div>';
     }
-    // Buildings as pale blocks.
-    ctx.fillStyle = '#7a8390';
-    const block = WORLD.blockSize;
-    for (let bx = 0; bx < WORLD.blocks; bx += 1) {
-      for (let bz = 0; bz < WORLD.blocks; bz += 1) {
-        const cx = -half + 20 + bx * WORLD.pitch + 7;
-        const cz = -half + 20 + bz * WORLD.pitch + 7;
-        const [mx, my] = toMap(cx, cz);
-        const w = (block / (half * 2)) * size;
-        ctx.fillRect(mx, my, w, w);
+    el.innerHTML = html;
+  }
+
+  function updateWeapons() {
+    for (let i = 0; i < 4; i += 1) {
+      const slot = hud.slots[i];
+      const w = G.weapons.list[i];
+      const unlocked = (i < 2) || (i === 2 && G.missions.index >= 1) || (i === 3 && G.missions.index >= 2);
+      slot.classList.toggle('selected', G.weapons.selected === i);
+      slot.classList.toggle('locked', !unlocked);
+      const ammoEl = slot.querySelector('.w-ammo');
+      ammoEl.textContent = !unlocked ? 'LOCKED' : (w.ammo === Infinity ? '∞' : String(w.ammo));
+    }
+  }
+
+  function drawMinimap() {
+    const canvas = $('minimap');
+    const ctx = canvas.getContext('2d');
+    const S = 200;
+    const scale = S / 520; // world ±260 m maps onto the disc
+    ctx.clearRect(0, 0, S, S);
+    ctx.fillStyle = '#16222e';
+    ctx.beginPath();
+    ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2);
+    ctx.clip();
+    const toX = (x) => S / 2 + x * scale;
+    const toY = (z) => S / 2 + z * scale;
+    // City blocks.
+    ctx.fillStyle = '#2c3e50';
+    for (let bx = -204; bx <= 204; bx += 68) {
+      for (let bz = -204; bz <= 136; bz += 68) {
+        ctx.fillRect(toX(bx - 26), toY(bz - 26), 52 * scale, 52 * scale);
       }
     }
-    // Mission marker, gold with a breathing ring.
-    if (state.missionTarget) {
-      const [mx, my] = toMap(state.missionTarget.x, state.missionTarget.z);
-      const pulse = 8 + Math.sin(state.time * 3) * 3;
-      ctx.strokeStyle = 'rgba(255, 200, 32, 0.8)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(mx, my, pulse, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = '#ffc820';
-      ctx.beginPath();
-      ctx.arc(mx, my, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#101826';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+    // Beach and water.
+    ctx.fillStyle = '#8a7a5a';
+    ctx.fillRect(0, toY(165), S, S);
+    ctx.fillStyle = '#1a4a6a';
+    ctx.fillRect(0, toY(242), S, S);
+    // Pedestrians and traffic as faint dots.
+    ctx.fillStyle = 'rgba(220, 220, 200, 0.5)';
+    for (const ped of G.peds) {
+      ctx.fillRect(toX(ped.x) - 1, toY(ped.z) - 1, 2, 2);
     }
-    // Police as flashing red dots, traffic as white dots, the air unit orange.
-    for (const p of state.policeDots) {
-      const [mx, my] = toMap(p.x, p.z);
-      ctx.fillStyle = p.disabled ? '#7a3a3a' : '#ff3030';
-      ctx.fillRect(mx - 3, my - 3, 6, 6);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    for (const car of G.traffic) {
+      ctx.fillRect(toX(car.x) - 1.5, toY(car.z) - 1.5, 3, 3);
     }
-    for (const p of state.trafficDots) {
-      const [mx, my] = toMap(p.x, p.z);
-      ctx.fillStyle = '#d8dce2';
-      ctx.fillRect(mx - 2, my - 2, 4, 4);
-    }
-    if (state.heliDot) {
-      const [mx, my] = toMap(state.heliDot.x, state.heliDot.z);
-      ctx.fillStyle = '#ff9a3c';
+    // Police cruisers.
+    ctx.fillStyle = '#ff4a3a';
+    for (const c of G.police.cruisers) {
+      if (c.leaving) continue;
       ctx.beginPath();
-      ctx.arc(mx, my, 5, 0, Math.PI * 2);
+      ctx.arc(toX(c.x), toY(c.z), 3.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Player arrow, pointing along the heading.
-    const [px, py] = toMap(state.playerX, state.playerZ);
+    // Mission target.
+    if (G.missions.target) {
+      ctx.fillStyle = '#f0c040';
+      ctx.beginPath();
+      ctx.arc(toX(G.missions.target.x), toY(G.missions.target.z), 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#f0c040';
+      ctx.beginPath();
+      ctx.arc(toX(G.missions.target.x), toY(G.missions.target.z), 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // Mara: a green arrow pointing along her heading.
+    const px = toX(G.player.x);
+    const py = toY(G.player.z);
     ctx.save();
     ctx.translate(px, py);
-    ctx.rotate(Math.atan2(Math.sin(state.heading), Math.cos(state.heading)) + Math.PI);
-    ctx.fillStyle = '#37e08a';
+    ctx.rotate(Math.PI - G.player.heading);
+    ctx.fillStyle = '#2fd67a';
     ctx.beginPath();
-    ctx.moveTo(0, -9);
-    ctx.lineTo(7, 8);
-    ctx.lineTo(-7, 8);
+    ctx.moveTo(0, -7);
+    ctx.lineTo(-5, 6);
+    ctx.lineTo(5, 6);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+    ctx.restore();
   }
+
+  hud.update = function update(dt) {
+    const s = G.stats;
+    $('cash').textContent = formatCash(s.cash);
+    $('health-fill').style.width = Math.max(0, Math.min(100, s.health)) + '%';
+    $('armour-fill').style.width = Math.max(0, Math.min(100, s.armour)) + '%';
+    $('respect-fill').style.width = Math.max(0, Math.min(100, s.respect)) + '%';
+    updateStars();
+    $('air-unit').classList.toggle('hidden', !(G.police.heli && G.police.heli.active));
+    $('day-clock').textContent = 'DAY ' + s.day + ' · ' + formatClock(s.clockMinutes);
+
+    const panel = missionPanel(G);
+    $('mission-title').textContent = panel.job;
+    $('mission-stage').textContent = panel.stage;
+    $('mission-next').textContent = panel.next;
+    const timerEl = $('mission-timer');
+    if (panel.timer === null || panel.timer === undefined) {
+      timerEl.classList.add('hidden');
+    } else {
+      timerEl.classList.remove('hidden');
+      timerEl.textContent = formatTimer(panel.timer);
+    }
+
+    updateNav();
+    updateDispatch();
+    updateWeapons();
+
+    if (G.time > hud.dialogueUntil) hud.hideDialogue();
+    if (G.time > hud.toastUntil) $('toast').classList.add('hidden');
+
+    $('location-line').textContent =
+      districtAt(G.player.x, G.player.z) + ' · ' + heatWord(G.police.wanted);
+
+    const carInfo = $('car-info');
+    const speedEl = $('speed');
+    if (G.player.inCar && G.player.car) {
+      carInfo.classList.remove('hidden');
+      speedEl.classList.remove('hidden');
+      $('car-name').textContent =
+        G.player.car.name + ' · ' + Math.round(G.player.car.cond) + '%';
+      $('car-condition-fill').style.width = Math.max(0, G.player.car.cond) + '%';
+      speedEl.textContent = Math.round(Math.abs(G.player.car.speed) * 3.6) + ' km/h';
+      $('radio-line').textContent = '♪ ' + RADIO[G.radio.station];
+    } else {
+      carInfo.classList.add('hidden');
+      speedEl.classList.add('hidden');
+      $('radio-line').textContent = '';
+    }
+
+    $('hint').textContent = G.player.inCar
+      ? 'W A S D drive · E exit car · 1-4 weapons · R radio · P pause · M mute'
+      : 'W A S D move · Shift run · E enter car · F punch / fire · 1-4 weapons · Tab next job · P pause';
+
+    hud.mapTimer -= dt;
+    if (hud.mapTimer <= 0) {
+      hud.mapTimer = 0.15;
+      drawMinimap();
+    }
+  };
+
+  hud.refreshMenu = function refreshMenu() {
+    const save = G.saveData;
+    const cont = $('continue-btn');
+    const line = $('save-line');
+    if (save) {
+      cont.classList.remove('hidden');
+      line.textContent = 'Saved — Day ' + (save.day || 1) + ' · $' +
+        Math.floor(save.cash || 0).toLocaleString('en-US');
+    } else {
+      cont.classList.add('hidden');
+      line.textContent = '';
+    }
+  };
+
+  return hud;
 }

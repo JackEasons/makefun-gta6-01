@@ -1,127 +1,509 @@
-/* Solmar Bay — HUD and menu styling: dark glass panels over the sunset,
-   gold accents, big readable type. Everything is positioned, nothing scrolls. */
+/* Solmar Bay — sunset HUD. Dark glass panels, gold accents, green cash.
+   Everything is positioned over the 3D canvas; overlays cover the screen. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
 html, body {
-  margin: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #1a1420;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #f2ede4;
+  background: #1a1210;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: #f2ead8;
+  -webkit-user-select: none;
+  user-select: none;
 }
-#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+#game, #game canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .hidden { display: none !important; }
-#status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* ---- HUD ---- */
-#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
-#top-left { position: absolute; top: 14px; left: 16px; }
-#cash { font-size: 30px; font-weight: 800; color: #7de8a8; text-shadow: 0 2px 6px rgba(0,0,0,.7); }
-.bar-label { font-size: 10px; letter-spacing: 2px; color: rgba(255,255,255,.65); margin-top: 6px; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
-#health, #armour, #respect { width: 180px; height: 10px; margin-top: 2px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.35); border-radius: 5px; overflow: hidden; }
-#armour, #respect { height: 8px; }
-#health-fill { height: 100%; width: 100%; background: #37e08a; transition: width .2s; }
-#health-fill.low { background: #ff5040; }
-#armour-fill { height: 100%; width: 0; background: #7ab8e8; transition: width .2s; }
-#respect-fill { height: 100%; width: 0; background: #e8a0ff; transition: width .2s; }
-#top-right { position: absolute; top: 10px; right: 18px; text-align: right; }
-#stars { font-size: 30px; letter-spacing: 4px; color: rgba(255,255,255,.5); text-shadow: 0 2px 8px rgba(0,0,0,.8); }
-#stars.hot { color: #ffd23a; animation: pulse 1s infinite; }
-@keyframes pulse { 50% { opacity: .55; } }
-#air-unit { font-size: 13px; font-weight: 800; letter-spacing: 2px; color: #ff6a5a; margin-top: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.8); animation: pulse 1s infinite; }
-#day-clock { font-size: 14px; font-weight: 700; color: #ffe9a8; margin-top: 4px; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+/* ---------- HUD frame ---------- */
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+#hud button { pointer-events: auto; }
+
+.panel, #mission, #dispatch, #nav, #dialogue {
+  background: rgba(12, 16, 24, 0.72);
+  border: 1px solid rgba(240, 200, 120, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+/* ---------- top left: cash and bars ---------- */
+
+#top-left {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 210px;
+}
+
+#cash {
+  font-size: 34px;
+  font-weight: 800;
+  color: #7df0a8;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.bar-label {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #d8cba8;
+  margin: 6px 0 2px;
+}
+
+.bar {
+  height: 9px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.bar .fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 5px;
+  transition: width 0.25s ease;
+}
+
+.fill.health { background: linear-gradient(90deg, #2fd67a, #7df0a8); }
+.fill.armour { background: linear-gradient(90deg, #3f8fd2, #8ec8f0); }
+.fill.respect { background: linear-gradient(90deg, #b06fd2, #d8a0f0); }
+.fill.car { background: linear-gradient(90deg, #e0a030, #f0d080); }
+
+/* ---------- top right: stars, air unit, clock ---------- */
+
+#top-right {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  text-align: right;
+}
+
+#stars {
+  font-size: 30px;
+  letter-spacing: 4px;
+  color: #f0c040;
+  line-height: 1;
+}
+
+#stars .off { color: rgba(255, 255, 255, 0.35); }
+
+#air-unit {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #ff7a5a;
+}
+
+#day-clock {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #f2e2b8;
+}
+
+/* ---------- mission panel ---------- */
+
 #mission {
-  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
-  width: 420px; padding: 10px 16px; text-align: left;
-  background: rgba(10, 14, 24, .62); border: 1px solid rgba(255, 210, 58, .55); border-radius: 8px;
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 460px;
+  max-width: 46vw;
+  padding: 12px 18px 13px;
+  text-align: left;
 }
-#mission-title { font-size: 15px; font-weight: 800; letter-spacing: 1px; color: #ffd23a; }
-#mission-stage { font-size: 12px; color: #ffe9a8; letter-spacing: 1px; margin-top: 2px; }
-#mission-next { font-size: 13px; color: #f2ede4; margin-top: 4px; }
-#mission-timer { font-size: 14px; font-weight: 800; color: #ff8a5a; margin-top: 4px; }
-#nav {
-  position: absolute; top: 152px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 10px; padding: 6px 14px; white-space: nowrap;
-  background: rgba(10, 14, 24, .62); border: 1px solid rgba(255, 210, 58, .55); border-radius: 8px;
-  font-size: 14px; font-weight: 800; letter-spacing: 1px; color: #ffd23a;
-  text-shadow: 0 1px 4px rgba(0,0,0,.8);
-}
-#nav-arrow { display: inline-block; font-size: 20px; line-height: 1; }
-#nav-text { font-size: 13px; color: #f2ede4; }
-#dispatch {
-  position: absolute; left: 16px; top: 196px; width: 212px; padding: 8px 10px;
-  background: rgba(10, 14, 24, .66); border: 1px solid rgba(120, 160, 255, .5); border-radius: 8px;
-}
-#dispatch-title { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: #8ab8ff; margin-bottom: 4px; }
-.dispatch-row { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; padding: 3px 0; border-top: 1px solid rgba(255,255,255,.08); }
-.dispatch-row .unit { font-weight: 700; color: #fff; }
-.dispatch-row .role { color: #ffb0a0; }
-.dispatch-row .dist { color: #ffe9a8; }
-.dispatch-row.disabled .unit { color: #888; text-decoration: line-through; }
-.dispatch-empty { font-size: 12px; color: rgba(255,255,255,.6); }
-#weapons { position: absolute; right: 18px; top: 150px; display: flex; flex-direction: column; gap: 6px; }
-.weapon-slot { width: 158px; padding: 6px 8px; background: rgba(10, 14, 24, .66); border: 1px solid rgba(255,255,255,.3); border-radius: 6px; font-size: 12px; }
-.weapon-slot.selected { border-color: #ffd23a; background: rgba(60, 44, 10, .8); }
-.weapon-slot.locked { opacity: .5; }
-.weapon-slot .w-key { display: inline-block; width: 16px; font-weight: 800; color: #ffe9a8; }
-.weapon-slot .w-name { font-weight: 800; letter-spacing: 1px; }
-.weapon-slot .w-ammo { float: right; color: #ffe9a8; font-weight: 700; }
-#dialogue {
-  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%);
-  display: flex; gap: 12px; align-items: center; max-width: 560px; padding: 10px 16px;
-  background: rgba(10, 14, 24, .82); border: 1px solid rgba(255, 180, 90, .5); border-radius: 10px;
-  opacity: 0; transition: opacity .3s;
-}
-#dialogue.show { opacity: 1; }
-#dialogue-avatar {
-  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-  background: linear-gradient(180deg, #ff9a3c, #d8382c);
-  display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; color: #fff;
-}
-#dialogue-name { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: #ffc46a; }
-#dialogue-line { font-size: 14px; line-height: 1.4; }
-#toast {
-  position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%);
-  max-width: 60%; padding: 10px 18px; text-align: center; font-size: 16px;
-  background: rgba(10, 14, 24, .78); border-radius: 8px; opacity: 0; transition: opacity .3s;
-}
-#toast.show { opacity: 1; }
-#minimap {
-  position: absolute; left: 16px; bottom: 16px; width: 200px; height: 200px;
-  border: 3px solid rgba(255,255,255,.6); border-radius: 50%; background: #1d3247;
-  box-shadow: 0 4px 18px rgba(0,0,0,.5);
-}
-#location-line { position: absolute; left: 16px; bottom: 228px; font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #ffe9a8; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
-#car-info { position: absolute; right: 20px; bottom: 96px; text-align: right; }
-#car-name { font-size: 16px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
-#car-condition { width: 180px; height: 8px; margin-top: 4px; margin-left: auto; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.35); border-radius: 4px; overflow: hidden; }
-#car-condition-fill { height: 100%; background: #ffd23a; }
-#speed { position: absolute; right: 20px; bottom: 48px; font-size: 26px; font-weight: 800; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
-#radio-line { position: absolute; right: 20px; bottom: 142px; font-size: 13px; color: #ffd98a; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
-#hint { position: absolute; right: 20px; bottom: 16px; font-size: 12px; color: rgba(255,255,255,.75); text-shadow: 0 1px 4px rgba(0,0,0,.8); }
 
-/* ---- Screens ---- */
-.screen {
-  position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(180deg, rgba(20,12,28,.55), rgba(40,16,20,.72));
+#mission-title {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #f0c040;
 }
-.panel {
-  max-width: 620px; margin: 0 20px; padding: 34px 40px; text-align: center;
-  background: rgba(12, 16, 26, .82); border: 1px solid rgba(255, 180, 90, .45); border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+
+#mission-stage {
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #e8dcc0;
+  margin-top: 2px;
 }
-.panel h1 {
-  margin: 0; font-size: 54px; letter-spacing: 6px; font-weight: 900;
-  background: linear-gradient(180deg, #ffe9a8, #ff7a3c); -webkit-background-clip: text; background-clip: text; color: transparent;
+
+#mission-next {
+  font-size: 14px;
+  color: #f2ead8;
+  margin-top: 4px;
 }
-.panel h2 { margin: 0 0 12px; font-size: 34px; letter-spacing: 2px; }
-.tagline { margin: 4px 0 16px; font-size: 18px; letter-spacing: 4px; text-transform: uppercase; color: #ffc46a; }
-#story, #caught-line, #finale-line { font-size: 16px; line-height: 1.55; color: #e8e2d4; }
-#save-line { font-size: 14px; color: #7de8a8; }
-.buttons { display: flex; gap: 12px; justify-content: center; margin: 22px 0 8px; flex-wrap: wrap; }
-button {
-  padding: 12px 26px; font-size: 17px; font-weight: 700; color: #1a1420; cursor: pointer;
-  background: linear-gradient(180deg, #ffd23a, #ff9a3c); border: none; border-radius: 10px;
+
+#mission-timer {
+  font-size: 16px;
+  font-weight: 800;
+  color: #ff9a3a;
+  margin-top: 4px;
+  letter-spacing: 1px;
 }
-button:hover { filter: brightness(1.1); }
-.controls { font-size: 13px; line-height: 1.6; color: #b8b2a4; }
-.fine { font-size: 11px; color: #8a8474; }
+
+/* ---------- nav compass strip ---------- */
+
+#nav {
+  position: absolute;
+  top: 118px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  max-width: 60vw;
+}
+
+#nav-arrow {
+  display: inline-block;
+  font-size: 20px;
+  color: #f0c040;
+  line-height: 1;
+  transition: transform 0.1s linear;
+}
+
+#nav-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f2ead8;
+  white-space: nowrap;
+}
+
+/* ---------- dispatch ---------- */
+
+#dispatch {
+  position: absolute;
+  top: 190px;
+  left: 16px;
+  width: 240px;
+  padding: 10px 14px;
+}
+
+#dispatch-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #8ec8f0;
+  margin-bottom: 6px;
+}
+
+.dispatch-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 2px 0;
+  color: #e8e0cc;
+}
+
+.dispatch-row .d-name { font-weight: 700; color: #f2ead8; }
+.dispatch-row .d-role { color: #ff9a7a; letter-spacing: 1px; }
+.dispatch-row .d-dist { color: #b8c8d8; }
+
+/* ---------- weapons ---------- */
+
+#weapons {
+  position: absolute;
+  top: 190px;
+  right: 16px;
+  width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weapon-slot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(12, 16, 24, 0.72);
+  border: 1px solid rgba(240, 200, 120, 0.25);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 14px;
+  color: #d8cba8;
+}
+
+.weapon-slot .w-key {
+  color: #8a7a5a;
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+.weapon-slot .w-name { font-weight: 700; letter-spacing: 1px; flex: 1; }
+.weapon-slot .w-ammo { font-weight: 700; color: #f2ead8; }
+
+.weapon-slot.selected {
+  border-color: #f0c040;
+  background: rgba(60, 44, 12, 0.85);
+  color: #ffe9a8;
+}
+
+.weapon-slot.locked { opacity: 0.55; }
+.weapon-slot.locked .w-ammo { color: #a89878; letter-spacing: 1px; }
+
+/* ---------- dialogue ---------- */
+
+#dialogue {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 14px;
+  width: 560px;
+  max-width: 72vw;
+  padding: 12px 16px;
+}
+
+#dialogue.show { display: flex; }
+
+#dialogue-avatar {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e07a2a, #c23a2a);
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+#dialogue-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #f0c040;
+  margin-bottom: 2px;
+}
+
+#dialogue-line {
+  font-size: 15px;
+  line-height: 1.35;
+  color: #f2ead8;
+}
+
+/* ---------- toast ---------- */
+
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: 190px;
+  transform: translateX(-50%);
+  background: rgba(12, 16, 24, 0.85);
+  border: 1px solid rgba(240, 200, 120, 0.4);
+  border-radius: 999px;
+  padding: 8px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffe9a8;
+  white-space: nowrap;
+}
+
+/* ---------- minimap and location ---------- */
+
+#minimap {
+  position: absolute;
+  left: 16px;
+  bottom: 56px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  border: 2px solid rgba(240, 200, 120, 0.45);
+  background: #16222e;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+#location-line {
+  position: absolute;
+  left: 16px;
+  bottom: 252px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #f2e2b8;
+}
+
+/* ---------- car info, speed, radio, hint ---------- */
+
+#car-info {
+  position: absolute;
+  right: 16px;
+  bottom: 116px;
+  width: 210px;
+  text-align: right;
+}
+
+#car-name {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #f2ead8;
+  margin-bottom: 5px;
+}
+
+#car-info .bar { width: 210px; margin-left: auto; }
+
+#speed {
+  position: absolute;
+  right: 16px;
+  bottom: 56px;
+  font-size: 30px;
+  font-weight: 800;
+  color: #f2ead8;
+}
+
+#radio-line {
+  position: absolute;
+  right: 16px;
+  bottom: 158px;
+  font-size: 13px;
+  color: #e8c860;
+  letter-spacing: 0.5px;
+}
+
+#hint {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  font-size: 12px;
+  color: rgba(242, 234, 216, 0.75);
+  letter-spacing: 0.5px;
+}
+
+/* ---------- overlays: menu, pause, caught, finale ---------- */
+
+#menu, #pause, #caught, #finale {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(10, 8, 10, 0.45);
+  padding: 20px;
+}
+
+#menu > *, #pause > *, #caught > *, #finale > * { max-width: 640px; }
+
+#menu h1 {
+  font-size: 74px;
+  font-weight: 900;
+  letter-spacing: 10px;
+  background: linear-gradient(180deg, #ffe9a8, #e07a2a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1;
+}
+
+#menu .subtitle {
+  font-size: 20px;
+  letter-spacing: 8px;
+  color: #f0c040;
+  margin: 10px 0 22px;
+}
+
+#menu #story {
+  font-size: 17px;
+  line-height: 1.55;
+  color: #f2ead8;
+  margin-bottom: 26px;
+}
+
+#pause h2, #caught h2, #finale h2 {
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #f0c040;
+  margin-bottom: 14px;
+}
+
+#caught h2 { color: #ff6a4a; }
+
+#pause p, #caught p, #finale p {
+  font-size: 16px;
+  line-height: 1.5;
+  color: #e8dcc0;
+  margin-bottom: 22px;
+}
+
+#menu button, #pause button, #caught button, #finale button {
+  display: block;
+  margin: 8px auto;
+  min-width: 220px;
+  padding: 13px 28px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #241a08;
+  background: linear-gradient(180deg, #ffd76a, #e09a2a);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+#menu button:hover, #pause button:hover, #caught button:hover, #finale button:hover {
+  filter: brightness(1.12);
+}
+
+#menu .controls {
+  margin-top: 26px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #d8cba8;
+}
+
+#menu .fine {
+  margin-top: 16px;
+  font-size: 12px;
+  color: rgba(216, 203, 168, 0.7);
+}
+
+#save-line {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #8ec8f0;
+}
+
+#status {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  transform: translateX(-50%);
+  z-index: 4;
+  font-size: 11px;
+  color: rgba(242, 234, 216, 0.5);
+  pointer-events: none;
+}

@@ -1,130 +1,145 @@
-// Solmar Bay — fists and firearms. On foot, Mara can throw a punch (F or
-// click) or fire the selected weapon (keys 1-4 pick a slot). A pedestrian in
-// reach goes down for a few seconds and the heat notices; a cop in reach
-// notices a lot more, and a cruiser takes real damage — shoot one up and it
-// stalls, then gets towed. Guns cost ammo and restock when a job pays out;
-// slots unlock as the story advances, so a locked slot is a promise, not a
-// decoration. The punch is a quick arm swing with a thud, and it briefly
-// staggers whatever it lands on.
-
+// Weapons and firing. Fists punch at arm's length; guns fire at the
+// nearest target in front of the camera (on foot) or the car (drive-by).
+// Hitting a pedestrian knocks them down and draws heat.
 import * as THREE from 'three';
-import { WANTED_TUNING, WEAPONS } from './config.js';
+import { WEAPONS } from './config.js';
+import { knockPedDown } from './traffic.js';
+import { addWanted } from './police.js';
 
-export class Combat {
-  constructor() {
-    this.cooldown = 0;
-    this.swing = 0; // 0..1, the arm swing animation
-    this.weapons = WEAPONS.map((w) => ({ ...w, ammo: w.ammo }));
-    this.selected = 0;
+export function createWeapons() {
+  return {
+    list: WEAPONS.map((w) => ({ ...w })),
+    selected: 0,
+    lastFire: 0,
+  };
+}
+
+export function weaponUnlocked(G, index) {
+  if (index === 2) return G.missions.index >= 1;
+  if (index === 3) return G.missions.index >= 2;
+  return true;
+}
+
+export function selectWeapon(G, index) {
+  if (index < 0 || index > 3) return;
+  if (!weaponUnlocked(G, index)) {
+    G.audio.deny();
+    return;
   }
+  G.weapons.selected = index;
+  G.audio.click();
+}
 
-  unlocked(n, missionsDone) {
-    return n >= 0 && n < this.weapons.length && missionsDone >= this.weapons[n].unlock;
+function nearestTarget(G, origin, forward, maxRange, maxAngle) {
+  let best = null;
+  let bestD = Infinity;
+  const consider = (x, z, obj) => {
+    const dx = x - origin.x;
+    const dz = z - origin.z;
+    const d = Math.hypot(dx, dz);
+    if (d > maxRange || d >= bestD) return;
+    const ang = Math.abs(angleDiff(Math.atan2(dx, dz), forward));
+    if (ang > maxAngle) return;
+    best = obj;
+    bestD = d;
+  };
+  for (const ped of G.peds) {
+    if (ped.down > 0) continue;
+    consider(ped.x, ped.z, { kind: 'ped', obj: ped });
   }
-
-  current() {
-    return this.weapons[this.selected];
+  for (const c of G.police.cruisers) {
+    if (c.disabled || c.leaving) continue;
+    consider(c.x, c.z, { kind: 'cruiser', obj: c });
   }
+  return best;
+}
 
-  // Returns true, or 'locked' when the story has not opened the slot yet.
-  select(n, missionsDone) {
-    if (n < 0 || n >= this.weapons.length) return false;
-    if (!this.unlocked(n, missionsDone)) return 'locked';
-    this.selected = n;
+function angleDiff(a, b) {
+  let d = a - b;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+export function fireWeapon(G) {
+  const w = G.weapons;
+  const weapon = w.list[w.selected];
+  const now = G.time;
+  if (now - w.lastFire < weapon.rate) return false;
+  w.lastFire = now;
+
+  const p = G.player;
+  if (weapon.name === 'FISTS') {
+    G.audio.punch();
+    const fwd = p.inCar ? p.car.heading : p.heading;
+    const origin = p.inCar ? p.car : p;
+    const hit = nearestTarget(G, origin, fwd, weapon.range, 0.9);
+    if (hit && hit.kind === 'ped') {
+      knockPedDown(G, hit.obj);
+      addWanted(G, 1);
+      G.hud.toast('You dropped a pedestrian. The bay noticed.');
+    }
     return true;
   }
 
-  // A finished job restocks the guns.
-  refill() {
-    this.weapons[1].ammo += 12;
-    this.weapons[2].ammo += 4;
-    this.weapons[3].ammo += 30;
+  if (weapon.ammo <= 0) {
+    G.audio.deny();
+    G.hud.toast(weapon.name + ' is dry — finish a job for more ammo.');
+    return false;
   }
+  weapon.ammo -= 1;
+  G.audio.shot();
 
-  update(dt) {
-    this.cooldown = Math.max(0, this.cooldown - dt);
-    this.swing = Math.max(0, this.swing - dt * 3.2);
+  const origin = p.inCar ? p.car : p;
+  const forward = p.inCar ? p.car.heading : G.camYaw + Math.PI;
+  const pellets = weapon.pellets || 1;
+  let hitAny = null;
+  for (let i = 0; i < pellets; i += 1) {
+    const spread = (i - (pellets - 1) / 2) * 0.06;
+    const hit = nearestTarget(G, origin, forward + spread, weapon.range, 0.22);
+    if (hit) hitAny = hit;
   }
-
-  // Fires the selected weapon. Returns 'ped' | 'police' | 'miss' |
-  // 'empty' | 'cooldown'.
-  fire(playerPos, playerHeading, traffic, police, audio) {
-    const w = this.current();
-    if (w.id === 'fists') return this.punch(playerPos, playerHeading, traffic, police, audio);
-    if (this.cooldown > 0) return 'cooldown';
-    if (w.ammo <= 0) return 'empty';
-    this.cooldown = w.cooldown;
-    w.ammo -= 1;
-    if (audio) audio.shot(w.id);
-    const target = this.pickTarget(playerPos, playerHeading, w.range, traffic, police);
-    if (!target) return 'miss';
-    if (target.kind === 'ped') {
-      target.ped.down = 4;
-      target.ped.group.rotation.x = -Math.PI / 2;
-      return 'ped';
-    }
-    police.damageCruiser(target.cruiser, w.damage);
-    return 'police';
-  }
-
-  // The nearest living thing in front of the barrel, inside the range.
-  pickTarget(playerPos, heading, range, traffic, police) {
-    const fx = Math.sin(heading);
-    const fz = Math.cos(heading);
-    let best = null;
-    let bestD = range;
-    for (const ped of traffic.peds) {
-      if (ped.down > 0) continue;
-      const dx = ped.group.position.x - playerPos.x;
-      const dz = ped.group.position.z - playerPos.z;
-      const fwd = dx * fx + dz * fz;
-      const side = Math.abs(dx * fz - dz * fx);
-      const d = Math.hypot(dx, dz);
-      if (fwd > 0 && d < bestD && side < 2.5) {
-        bestD = d;
-        best = { kind: 'ped', ped };
+  if (hitAny) {
+    if (hitAny.kind === 'ped') {
+      knockPedDown(G, hitAny.obj);
+      addWanted(G, 1);
+    } else if (hitAny.kind === 'cruiser') {
+      const c = hitAny.obj;
+      c.cond = Math.max(0, c.cond - weapon.damage * pellets);
+      if (c.cond <= 0 && !c.disabled) {
+        c.disabled = true;
+        c.speed = 0;
+        G.hud.toast('Cruiser disabled!');
+        addWanted(G, 1);
       }
     }
-    for (const cruiser of police.cruisers) {
-      if (cruiser.disabled > 0) continue;
-      const dx = cruiser.group.position.x - playerPos.x;
-      const dz = cruiser.group.position.z - playerPos.z;
-      const fwd = dx * fx + dz * fz;
-      const side = Math.abs(dx * fz - dz * fx);
-      const d = Math.hypot(dx, dz);
-      if (fwd > 0 && d < bestD && side < 3) {
-        bestD = d;
-        best = { kind: 'police', cruiser };
-      }
-    }
-    return best;
+    showTracer(G, origin, hitAny.obj);
   }
+  return true;
+}
 
-  // Returns 'ped' | 'police' | 'miss' | 'cooldown'.
-  punch(playerPos, playerHeading, traffic, police, audio) {
-    if (this.cooldown > 0) return 'cooldown';
-    this.cooldown = 0.45;
-    this.swing = 1;
-    if (audio) audio.thud();
-    const reach = new THREE.Vector3(
-      playerPos.x + Math.sin(playerHeading) * 1.8,
-      0,
-      playerPos.z + Math.cos(playerHeading) * 1.8,
-    );
-    const ped = traffic.nearestPedestrian(reach, 2.2);
-    if (ped) {
-      ped.down = 4;
-      ped.group.rotation.x = -Math.PI / 2;
-      return 'ped';
-    }
-    for (const cruiser of police.cruisers) {
-      if (cruiser.group.position.distanceTo(reach) < 2.4) return 'police';
-    }
-    return 'miss';
-  }
+let tracer = null;
+let tracerUntil = 0;
 
-  // The swing angle for Mara's right arm this frame.
-  armAngle() {
-    return -this.swing * 1.6;
+export function showTracer(G, from, target) {
+  if (!G.scene) return;
+  if (tracer) G.scene.remove(tracer);
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(from.x, 1.2, from.z),
+    new THREE.Vector3(target.x, 1.1, target.z),
+  ]);
+  tracer = new THREE.Line(
+    geo,
+    new THREE.LineBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.9 }),
+  );
+  G.scene.add(tracer);
+  tracerUntil = G.time + 0.09;
+}
+
+export function updateTracer(G) {
+  if (tracer && G.time > tracerUntil) {
+    G.scene.remove(tracer);
+    tracer.geometry.dispose();
+    tracer = null;
   }
 }

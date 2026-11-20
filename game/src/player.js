@@ -1,103 +1,94 @@
-// Solmar Bay — Mara Voss on foot. The character is built from boxes and
-// spheres in code (jacket, jeans, cap, sneakers) and walks with a simple
-// bob; movement is camera-relative WASD with a run key, and buildings push
-// her out with a circle collision so she can slide along walls.
-
+// Mara Voss on foot: a blocky figure in a teal jacket, moved relative to
+// the camera with WASD, Shift to run, and a little walk bob so the motion
+// reads on screen.
 import * as THREE from 'three';
-import { PLAYER_TUNING, WORLD } from './config.js';
-import { resolveCircle } from './vehicles.js';
+import { TUNING } from './config.js';
+import { moveWithCollision } from './city.js';
 
-export function makePerson(shirtColor, pantsColor, skinColor = 0xd8a070, hairColor = 0x3a2a1a) {
-  const group = new THREE.Group();
+export function makePersonMesh(shirtColor, skinColor, withCap) {
+  const person = new THREE.Group();
+  const skin = new THREE.MeshLambertMaterial({ color: skinColor || 0xc89a72 });
   const shirt = new THREE.MeshLambertMaterial({ color: shirtColor });
-  const pants = new THREE.MeshLambertMaterial({ color: pantsColor });
-  const skin = new THREE.MeshLambertMaterial({ color: skinColor });
+  const pants = new THREE.MeshLambertMaterial({ color: 0x22242a });
+  const cap = new THREE.MeshLambertMaterial({ color: 0x2a3550 });
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.34), shirt);
-  torso.position.y = 1.12;
-  group.add(torso);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), skin);
-  head.position.y = 1.68;
-  group.add(head);
-
-  // Hair: a half-sphere cap under the hat, so the crowd is not bald.
-  const hair = new THREE.Mesh(
-    new THREE.SphereGeometry(0.25, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-    new THREE.MeshLambertMaterial({ color: hairColor }),
-  );
-  hair.position.y = 1.72;
-  group.add(hair);
-
-  const cap = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.25, 0.25, 0.1, 12),
-    new THREE.MeshLambertMaterial({ color: 0x2a4a6a }),
-  );
-  cap.position.y = 1.86;
-  group.add(cap);
-
-  const legGeo = new THREE.BoxGeometry(0.24, 0.72, 0.26);
-  const legL = new THREE.Mesh(legGeo, pants);
-  legL.position.set(-0.16, 0.36, 0);
-  group.add(legL);
-  const legR = new THREE.Mesh(legGeo, pants);
-  legR.position.set(0.16, 0.36, 0);
-  group.add(legR);
-
-  const armGeo = new THREE.BoxGeometry(0.18, 0.62, 0.2);
-  const armL = new THREE.Mesh(armGeo, shirt);
-  armL.position.set(-0.42, 1.12, 0);
-  group.add(armL);
-  const armR = new THREE.Mesh(armGeo, shirt);
-  armR.position.set(0.42, 1.12, 0);
-  group.add(armR);
-
-  return { group, legL, legR, armL, armR, torso };
-}
-
-// Mara's own look: teal jacket, dark jeans, her cap pulled low.
-export function makeMara() {
-  return makePerson(0x2a8f8f, 0x2a2f3a, 0xd8a070);
-}
-
-// On-foot update. cameraYaw is the direction the camera looks (radians).
-// Returns how far Mara moved this frame, for footsteps and the minimap.
-export function walkPlayer(person, input, cameraYaw, dt, colliders) {
-  const fwd = input.forward();
-  const str = input.strafe();
-  if (fwd === 0 && str === 0) {
-    person.legL.rotation.x = 0;
-    person.legR.rotation.x = 0;
-    person.armL.rotation.x = 0;
-    person.armR.rotation.x = 0;
-    return 0;
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.8, 0.24), pants);
+  legL.position.set(-0.14, 0.4, 0);
+  person.add(legL);
+  const legR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.8, 0.24), pants);
+  legR.position.set(0.14, 0.4, 0);
+  person.add(legR);
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.36), shirt);
+  torso.position.set(0, 1.16, 0);
+  person.add(torso);
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.66, 0.2), shirt);
+  armL.position.set(-0.42, 1.14, 0);
+  person.add(armL);
+  const armR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.66, 0.2), shirt);
+  armR.position.set(0.42, 1.14, 0);
+  person.add(armR);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.38), skin);
+  head.position.set(0, 1.72, 0);
+  person.add(head);
+  if (withCap) {
+    const capTop = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.12, 0.42), cap);
+    capTop.position.set(0, 1.95, 0);
+    person.add(capTop);
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.05, 0.2), cap);
+    brim.position.set(0, 1.9, 0.28);
+    person.add(brim);
   }
-  const speed = input.running() ? PLAYER_TUNING.runSpeed : PLAYER_TUNING.walkSpeed;
-  const sin = Math.sin(cameraYaw);
-  const cos = Math.cos(cameraYaw);
-  // Forward is away from the camera; strafe is to the camera's right.
-  let mx = -sin * fwd + cos * str;
-  let mz = -cos * fwd - sin * str;
-  const len = Math.hypot(mx, mz);
-  mx /= len;
-  mz /= len;
-  const pos = person.group.position;
-  pos.x += mx * speed * dt;
-  pos.z += mz * speed * dt;
-  pos.x = Math.max(-WORLD.bounds, Math.min(WORLD.bounds, pos.x));
-  pos.z = Math.max(-WORLD.bounds, Math.min(WORLD.bounds, pos.z));
-  resolveCircle(pos, PLAYER_TUNING.radius, colliders);
+  person.userData.legL = legL;
+  person.userData.legR = legR;
+  person.userData.armL = armL;
+  person.userData.armR = armR;
+  return person;
+}
 
-  // Face the way she is moving, and swing the limbs.
-  const targetHeading = Math.atan2(mx, mz);
-  let diff = targetHeading - person.group.rotation.y;
-  while (diff > Math.PI) diff -= Math.PI * 2;
-  while (diff < -Math.PI) diff += Math.PI * 2;
-  person.group.rotation.y += diff * Math.min(1, dt * 12);
-  const swing = Math.sin(performance.now() / 90) * 0.55;
-  person.legL.rotation.x = swing;
-  person.legR.rotation.x = -swing;
-  person.armL.rotation.x = -swing * 0.7;
-  person.armR.rotation.x = swing * 0.7;
-  return speed * dt;
+export function createPlayer(G) {
+  const mesh = makePersonMesh(0x2e7d6b, 0xc89a72, true);
+  mesh.position.set(G.player.x, 0, G.player.z);
+  G.scene.add(mesh);
+  return { mesh, bobPhase: 0 };
+}
+
+export function updatePlayer(G, dt) {
+  const p = G.player;
+  const input = G.input;
+  const mv = input.moveVector();
+  const running = input.running();
+  const speed = running ? TUNING.runSpeed : TUNING.walkSpeed;
+
+  // Camera forward on the ground plane, from camYaw (see main.js).
+  const fx = -Math.sin(G.camYaw);
+  const fz = -Math.cos(G.camYaw);
+  const rx = -fz;
+  const rz = fx;
+  const mx = fx * mv.z + rx * mv.x;
+  const mz = fz * mv.z + rz * mv.x;
+  const moving = Math.hypot(mx, mz) > 0.01;
+
+  if (moving) {
+    const step = speed * dt;
+    moveWithCollision(G.city.colliders, p, mx * step, mz * step);
+    const targetHeading = Math.atan2(mx, mz);
+    let dh = targetHeading - p.heading;
+    while (dh > Math.PI) dh -= Math.PI * 2;
+    while (dh < -Math.PI) dh += Math.PI * 2;
+    p.heading += dh * Math.min(1, dt * 12);
+    p.speed = speed;
+    p.mesh.userData.legL.rotation.x = Math.sin(G.time * 11) * 0.55;
+    p.mesh.userData.legR.rotation.x = -Math.sin(G.time * 11) * 0.55;
+    p.mesh.userData.armL.rotation.x = -Math.sin(G.time * 11) * 0.4;
+    p.mesh.userData.armR.rotation.x = Math.sin(G.time * 11) * 0.4;
+  } else {
+    p.speed = 0;
+    p.mesh.userData.legL.rotation.x *= 0.8;
+    p.mesh.userData.legR.rotation.x *= 0.8;
+    p.mesh.userData.armL.rotation.x *= 0.8;
+    p.mesh.userData.armR.rotation.x *= 0.8;
+  }
+
+  p.mesh.position.set(p.x, 0, p.z);
+  p.mesh.rotation.y = p.heading;
 }

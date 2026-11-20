@@ -1,57 +1,34 @@
-[![Make GTA 6](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
-[![Rank](https://make.fun/badge/gta6-01/JackEasons/makefun-gta6-01/rank.svg)](https://make.fun/bounty/gta6-01)
-[![Reward](https://make.fun/badge/gta6-01/JackEasons/makefun-gta6-01/reward.svg)](https://make.fun/bounty/gta6-01)
-
 # Solmar Bay — A Sunset Hustle
 
-An original open-world crime game in the spirit of GTA 6, built by an AI agent for make.fun's [Make GTA 6](https://make.fun/bounty/gta6-01) bounty ($1,666 in USDC).
+[![Make GTA 6](https://make.fun/badge/gta6-01.svg)](https://make.fun/c/gta6-01)
+[![Rank](https://make.fun/badge/gta6-01/JackEasons/makefun-gta6-01/rank.svg)](https://make.fun/c/gta6-01)
+[![Reward](https://make.fun/badge/gta6-01/JackEasons/makefun-gta6-01/reward.svg)](https://make.fun/c/gta6-01)
 
-Mara Voss came back to Solmar Bay with a busted car, a borrowed name and a debt to Silas Crane. Explore a sun-soaked coastal city on foot and by car, steal cars, dodge the law, and work three story jobs to buy your way out.
+An original open-world crime game for the [make.fun GTA 6 bounty](https://make.fun/c/gta6-01), built with three.js and plain static files — no network, no build step. Mara Voss came back to Solmar Bay with a busted car, a borrowed name and a debt to Silas Crane. One job at a time, she is buying her way out — if the bay lets her.
+
+## The game
+
+- **A city to explore**: 7 × 6 blocks of sunset towers, a beach, a pier and the bay — on foot or behind the wheel.
+- **Three jobs**: a pier pickup ($600), a stolen gold coupe delivered west ($900), and a getaway against the clock ($1,500). Finish all three and the bay is yours.
+- **Traffic and pedestrians**: eight cars on the avenues, fourteen people on the sidewalks, all living their own routes.
+- **Wanted level**: steal a car or drop a pedestrian and the SBPB answers — cruisers with named units, a spotlight helicopter at four stars, and a bust that costs $200.
+- **Combat**: fists, pistol, shotgun (after one job) and Viper SMG (after two), plus drive-by shooting from the car.
+- **HUD**: cash, health / armour / respect, wanted stars, a mission panel, a waypoint compass that always points at the next objective, dispatch rows with live distances, and a circular minimap.
+- **Saves**: progress writes to localStorage after every job and on pause; Continue on the menu picks it back up.
 
 ## Play it
 
-Serve `game/` with any static server and open `game/index.html` in a desktop browser (Chrome works best). No network request is made at runtime; three.js is vendored under `game/vendor/`.
-
 ```sh
 node serve.ts
-# then open http://localhost:8080
+# open http://localhost:8080
 ```
 
-Or hand the entry in with the program at the root:
+W A S D move & drive · Shift run · E enter / exit car · F punch / fire · 1-4 weapons · R radio · Tab next job · P pause · M mute · Drag mouse to look.
 
-```sh
-mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-```
+## Screenshots
 
-## What's in the world
+The four shots in `screenshots/` are staged renders of the game itself (`?shot=cover|onfoot|driving|mission&seed=7`), taken in a browser from this code — never edited or composited.
 
-- **A city to explore** — a 7×7 grid of pastel blocks, palm-lined boulevards, a beach with umbrellas and the sea, all under a low sunset sun.
-- **On foot and by car** — third-person walking with a mouse-orbit camera; arcade driving with steering, braking and wall collisions. Press **E** near a parked car to take it. Every car has an original model name and a condition that falls as it is crashed.
-- **Traffic and pedestrians** — AI cars cruise the streets, pedestrians stroll the sidewalks, and a pink scooter putters along the boulevard.
-- **Wanted level** — 0–5 stars for stealing cars, hitting pedestrians and ramming cruisers. Police cars chase and ram; at four stars a helicopter joins with a searchlight. Lay low and the heat fades — faster once you break line of sight, so a clean getaway really ends the chase. Get busted on foot or wasted in a crash and you wake at the safehouse, $200 lighter.
-- **Three story missions** — *The Pickup*, *Hot Wheels*, *The Long Way Home* — with stages, a gold beacon, radio dialogue from Silas in a dialogue box, and cash rewards. The last job runs on a three-minute clock.
-- **Combat** — fists (F or click) plus a four-slot arsenal (pistol, shotgun, Viper SMG) unlocked as the story advances, with real ammo. Guns restock when a job pays out.
-- **HUD** — wanted stars and an air-unit flag, cash, health, armour and respect bars, a mission panel (job, stage, next step, clock), a waypoint compass that always points at the next objective with the next step and the distance in metres, a police dispatch panel naming every unit with its live distance, weapon slots, a dialogue box with a character avatar, the radio station, the car's name and condition, the district and the heat, day and clock — and a live round minimap.
-- **Save** — cash, jobs done, respect, armour, day, clock and ammo persist in localStorage; Continue picks up where you left off.
-- **Sound** — synthesized WebAudio: engine hum, two-tone siren, gunshots, radio blips, pickup chimes and a mission jingle. No audio files.
+## License
 
-## Controls
-
-| Key | Action |
-| --- | --- |
-| W A S D / arrows | Move / drive |
-| Shift | Run |
-| E | Enter / exit car |
-| F or click | Punch / fire the selected weapon |
-| 1–4 | Pick a weapon slot |
-| R | Change the radio station |
-| Tab | Start the next job |
-| P / Esc | Pause |
-| M | Mute |
-| Mouse drag | Look around |
-
-## Structure
-
-`game/src/` is split by job: `city.js` builds the world, `player.js` walks Mara, `vehicles.js` builds and drives cars (and the helicopter), `traffic.js` runs AI cars, pedestrians and the scooter, `police.js` runs the wanted level, the dispatch roster and the air unit, `missions.js` runs the story, `combat.js` throws punches and fires guns, `hud.js` draws the HUD and minimap, `audio.js` synthesizes sound, `save.js` persists progress, `input.js` reads keys and mouse, `main.js` boots the game and runs the loop.
-
-Built by an AI agent for make.fun's [Make GTA 6](https://make.fun/bounty/gta6-01) bounty. Ref: gbg9q3ye.
+MIT. The city, people, cars and story are invented here — nothing from any commercial game.

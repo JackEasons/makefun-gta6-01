@@ -1,211 +1,162 @@
-// Solmar Bay — the story in three jobs. Missions run in order; each one
-// points a gold beacon at its target, talks through Silas on the radio, and
-// pays cash on completion. The mission state is what the save file keeps.
-//   1. The Pickup — walk or drive to the pier and grab the package.
-//   2. Hot Wheels — steal the gold coupe on Marina Row, deliver it to the garage.
-//   3. The Long Way Home — the law is on you; lose them all to finish the story.
-// Every job is staged (Hot Wheels has two stages), and the last one runs on
-// a three-minute clock: take too long and the job is off, though Tab starts
-// it again. panel() is what the HUD's mission panel reads.
+// The three jobs: start them with Tab, follow the stages, get paid.
+// Job 1 is a pier pickup, job 2 is a stolen coupe delivered west, job 3
+// is a getaway against the clock. Finishing all three ends the story.
+import { JOBS, JOB_BONUS, TUNING } from './config.js';
+import { setWanted } from './police.js';
+import { saveGame } from './save.js';
 
-import * as THREE from 'three';
-import { MISSIONS } from './config.js';
+export function createMissions() {
+  return {
+    index: 0, // jobs finished
+    active: false,
+    stage: 0,
+    timer: null,
+    target: null,
+  };
+}
 
-export class MissionManager {
-  constructor(scene, places) {
-    this.scene = scene;
-    this.places = places;
-    this.index = 0; // next mission to start
-    this.active = null; // { def, stage, target: Vector3 }
-    this.stageIndex = 0; // stage inside the active job
-    this.timer = null; // seconds left on a timed job, null when untimed
-    this.done = false;
-    this.beacon = this.makeBeacon();
-    this.beacon.visible = false;
-    scene.add(this.beacon);
-    this.package = this.makePackage();
-    this.package.visible = false;
-    scene.add(this.package);
+export function currentJob(G) {
+  return JOBS[G.missions.index] || null;
+}
+
+export function currentStage(G) {
+  const job = currentJob(G);
+  if (!job || !G.missions.active) return null;
+  return job.stages[G.missions.stage] || null;
+}
+
+export function startNextJob(G) {
+  const m = G.missions;
+  if (m.active || m.index >= JOBS.length) return false;
+  const job = JOBS[m.index];
+  m.active = true;
+  m.stage = 0;
+  m.timer = job.timerSeconds || null;
+  m.target = job.stages[0].target || null;
+  if (m.index === 2) {
+    // The whole bay is looking for Mara from the moment job 3 starts.
+    setWanted(G, 3);
   }
+  G.hud.showDialogue(job.intro.name, job.intro.initials, job.intro.line);
+  G.audio.chime();
+  return true;
+}
 
-  makeBeacon() {
-    const group = new THREE.Group();
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.9, 26, 12, 1, true),
-      new THREE.MeshBasicMaterial({
-        color: 0xffc820,
-        transparent: true,
-        opacity: 0.22,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      }),
-    );
-    pole.position.y = 13;
-    group.add(pole);
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(2.2, 0.18, 8, 32),
-      new THREE.MeshBasicMaterial({ color: 0xffc820 }),
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.3;
-    group.add(ring);
-    const diamond = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.8),
-      new THREE.MeshBasicMaterial({ color: 0xffd94a }),
-    );
-    diamond.position.y = 6;
-    group.add(diamond);
-    group.userData.diamond = diamond;
-    group.userData.ring = ring;
-    return group;
-  }
-
-  makePackage() {
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(0.7, 0.5, 0.7),
-      new THREE.MeshLambertMaterial({ color: 0x8a5a2a }),
-    );
-    box.position.y = 0.6;
-    const tape = new THREE.Mesh(
-      new THREE.BoxGeometry(0.72, 0.52, 0.12),
-      new THREE.MeshLambertMaterial({ color: 0xe8d8a0 }),
-    );
-    tape.position.y = 0.6;
-    const group = new THREE.Group();
-    group.add(box);
-    group.add(tape);
-    return group;
-  }
-
-  currentDef() {
-    return MISSIONS[this.index] ?? null;
-  }
-
-  // The mission panel's four lines: job, stage, next step, and the clock.
-  panel() {
-    if (this.done) {
-      return { job: 'STORY COMPLETE', stage: '', next: 'Free roam — Solmar Bay is yours.', timer: null };
+function completeJob(G) {
+  const m = G.missions;
+  const job = JOBS[m.index];
+  G.stats.cash += job.reward;
+  G.stats.armour = Math.min(100, G.stats.armour + JOB_BONUS.armour);
+  G.stats.respect = Math.min(100, G.stats.respect + JOB_BONUS.respect);
+  const bonus = JOB_BONUS.ammo;
+  for (let i = 1; i <= 3; i += 1) {
+    if (Number.isFinite(G.weapons.list[i].ammo)) {
+      G.weapons.list[i].ammo += bonus[i];
     }
-    if (!this.active) {
-      const def = this.currentDef();
-      if (!def) return { job: 'STORY COMPLETE', stage: '', next: '', timer: null };
-      return {
-        job: `JOB ${this.index + 1}/${MISSIONS.length} · ${def.title.toUpperCase()}`,
-        stage: 'READY',
-        next: 'Press Tab to start the next job.',
-        timer: null,
-      };
+  }
+  m.index += 1;
+  m.active = false;
+  m.stage = 0;
+  m.timer = null;
+  m.target = null;
+  G.hud.showDialogue(job.done.name, job.done.initials, job.done.line);
+  G.audio.chime();
+  if (m.index === 1) {
+    G.hud.toast('SHOTGUN unlocked — press 3.');
+  } else if (m.index === 2) {
+    G.hud.toast('VIPER SMG unlocked — press 4.');
+  }
+  saveGame(G);
+  if (m.index >= JOBS.length) {
+    G.onStoryComplete();
+  }
+}
+
+function failJob(G) {
+  const m = G.missions;
+  m.active = false;
+  m.stage = 0;
+  m.timer = null;
+  m.target = null;
+  G.hud.showDialogue(
+    'Silas Crane',
+    'SC',
+    'You took too long, Mara. The job is still there when you are ready.',
+  );
+}
+
+export function updateMissions(G, dt) {
+  const m = G.missions;
+  if (!m.active) return;
+  const job = JOBS[m.index];
+  if (!job) return;
+
+  // Job 3 is a countdown: lose the heat before it hits zero.
+  if (m.index === 2) {
+    m.timer -= dt;
+    if (G.police.wanted <= 0) {
+      completeJob(G);
+      return;
     }
-    const def = this.active.def;
+    if (m.timer <= 0) {
+      failJob(G);
+    }
+    return;
+  }
+
+  const stage = job.stages[m.stage];
+  if (!stage || !stage.target) return;
+  const dx = stage.target.x - G.player.x;
+  const dz = stage.target.z - G.player.z;
+  if (Math.hypot(dx, dz) > TUNING.jobCompleteRadius) return;
+
+  // Stage reached. Job 2's second stage needs the coupe itself, not Mara.
+  if (m.index === 1 && m.stage === 0) {
+    if (!G.player.inCar || G.player.car.name !== 'BREEZE GT') return;
+  }
+  if (m.index === 1 && m.stage === 1) {
+    if (!G.player.inCar || G.player.car.name !== 'BREEZE GT') return;
+  }
+
+  if (m.stage + 1 < job.stages.length) {
+    m.stage += 1;
+    m.target = job.stages[m.stage].target || null;
+    G.hud.toast('Coupe secured — get it to the garage.');
+    G.audio.chime();
+    return;
+  }
+  completeJob(G);
+}
+
+// The panel the HUD and the state dump read.
+export function missionPanel(G) {
+  const m = G.missions;
+  if (m.index >= JOBS.length) {
     return {
-      job: `JOB ${this.index + 1}/${MISSIONS.length} · ${def.title.toUpperCase()}`,
-      stage: `STAGE ${this.stageIndex + 1}/${def.stages.length}`,
-      next: def.stages[this.stageIndex],
-      timer: this.timer,
+      job: 'STORY COMPLETE',
+      stage: '',
+      next: 'Free roam — Solmar Bay is yours.',
+      timer: null,
     };
   }
-
-  start(onMessage) {
-    const def = this.currentDef();
-    if (!def || this.active) return null;
-    if (def.id === 'pickup') {
-      this.active = { def, stage: 'go', target: new THREE.Vector3(this.places.pier.x, 0, this.places.pier.z) };
-      this.package.position.set(this.places.pier.x, 0, this.places.pier.z);
-      this.package.visible = true;
-    } else if (def.id === 'hotwheels') {
-      this.active = { def, stage: 'steal', target: new THREE.Vector3(this.places.marinaRow.x, 0, this.places.marinaRow.z) };
-    } else if (def.id === 'getaway') {
-      this.active = { def, stage: 'lose', target: null };
-    }
-    this.stageIndex = 0;
-    this.timer = def.timeLimit ?? null;
-    this.beacon.visible = true;
-    this.moveBeacon();
-    onMessage(def.intro);
-    return this.active;
+  const job = JOBS[m.index];
+  const title = 'JOB ' + (m.index + 1) + '/3 · ' + job.name;
+  if (!m.active) {
+    return { job: title, stage: 'READY', next: 'Press Tab to start the next job.', timer: null };
   }
+  const stage = job.stages[m.stage];
+  return {
+    job: title,
+    stage: 'STAGE ' + (m.stage + 1) + '/' + job.stages.length,
+    next: stage.text,
+    timer: m.timer === null ? null : m.timer,
+  };
+}
 
-  moveBeacon() {
-    if (!this.active) return;
-    if (this.active.target) {
-      this.beacon.position.set(this.active.target.x, 0, this.active.target.z);
-      this.beacon.visible = true;
-    } else {
-      this.beacon.visible = false;
-    }
-  }
-
-  objectiveText() {
-    if (this.done) return 'Story complete — Solmar Bay is yours. Free roam.';
-    if (!this.active) return 'Press Tab to start the next job.';
-    return this.active.def.objective;
-  }
-
-  // Called every frame; returns an event string when something happens.
-  update(dt, playerPos, inCar, car, wanted, onMessage) {
-    if (!this.active) return null;
-    const def = this.active.def;
-    this.beacon.userData.diamond.rotation.y += dt * 2;
-    this.beacon.userData.diamond.position.y = 6 + Math.sin(performance.now() / 400) * 0.4;
-    this.beacon.userData.ring.scale.setScalar(1 + Math.sin(performance.now() / 300) * 0.08);
-
-    // A timed job: the clock runs out and the job is off — Tab retries it.
-    if (this.timer !== null) {
-      this.timer -= dt;
-      if (this.timer <= 0) {
-        this.timer = null;
-        this.active = null;
-        this.beacon.visible = false;
-        onMessage('Silas: "Too slow — the job is off. Press Tab to try it again."');
-        return 'failed';
-      }
-    }
-
-    if (def.id === 'pickup') {
-      if (playerPos.distanceTo(this.active.target) < 3) {
-        this.package.visible = false;
-        return this.complete(onMessage, 'Package secured. Silas is pleased — $600.');
-      }
-    } else if (def.id === 'hotwheels') {
-      if (this.active.stage === 'steal' && inCar && car && car.stolen && car.style === 'coupe') {
-        this.active.stage = 'deliver';
-        this.stageIndex = 1;
-        this.active.target = new THREE.Vector3(this.places.garage.x, 0, this.places.garage.z);
-        this.moveBeacon();
-        onMessage('Silas: "That is the one. Bring it to the garage on the west side."');
-        return 'stage';
-      }
-      if (this.active.stage === 'deliver' && inCar && playerPos.distanceTo(this.active.target) < 5) {
-        return this.complete(onMessage, 'Delivered clean. $900, no questions asked.');
-      }
-    } else if (def.id === 'getaway') {
-      if (wanted === 0) {
-        return this.complete(onMessage, 'Clean. The bay forgot your name — $1,500.');
-      }
-    }
-    return null;
-  }
-
-  complete(onMessage, line) {
-    const reward = this.active.def.reward;
-    this.active = null;
-    this.stageIndex = 0;
-    this.timer = null;
-    this.beacon.visible = false;
-    this.index += 1;
-    if (this.index >= MISSIONS.length) this.done = true;
-    onMessage(line);
-    return { completed: true, reward };
-  }
-
-  // The gold coupe for Hot Wheels is placed by main.js; this is its marker.
-  markCoupe(car) {
-    this.coupe = car;
-    car.group.traverse((child) => {
-      if (child.isMesh && child.material && child.material.emissive !== undefined) {
-        child.material = child.material.clone();
-        child.material.emissive = new THREE.Color(0x664400);
-      }
-    });
-  }
+export function missionObjective(G) {
+  const m = G.missions;
+  if (m.index >= JOBS.length) return 'Story complete — Solmar Bay is yours. Free roam.';
+  if (!m.active) return 'Press Tab to start the next job.';
+  const stage = JOBS[m.index].stages[m.stage];
+  return stage.objective;
 }

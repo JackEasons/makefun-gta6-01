@@ -1,171 +1,196 @@
-// Solmar Bay — tuning, palette and mission data in one place.
-// Every system reads its numbers from here so the game can be balanced
-// without hunting through the world, driving or police code.
+// Every number and name that shapes Solmar Bay lives here, so the rest of
+// the game reads one table instead of scattering magic values through the
+// code. Nothing in this file touches the DOM or three.js.
+
+export const SAVE_KEY = 'solmar-bay-save-v1';
 
 export const WORLD = {
-  // City grid: square blocks separated by streets, beach on the south edge.
-  blockSize: 46,
-  streetWidth: 14,
-  pitch: 60, // blockSize + streetWidth
-  blocks: 7, // 7 x 7 blocks, streets at -210 .. 210
-  beachStart: 210, // sand begins here (south, +z)
-  sandDepth: 52,
-  waterStart: 262,
-  waterDepth: 160,
-  bounds: 250, // playable clamp on x/z (beach included)
+  pitch: 68, // one city block plus one street
+  blocks: 7, // 7 x 7 blocks
+  half: 238, // playable edge, metres from the centre
+  beachZ: 186, // sand starts here
+  waterZ: 242, // the bay starts here
+  streetHalf: 8, // half the width of a road
+  towerMin: 30, // shortest tower, metres
+  towerMax: 68, // tallest tower, metres
 };
 
-export const PALETTE = {
-  skyTop: 0x3d5c8f,
-  skyHorizon: 0xffb36b,
-  fog: 0xf7b183,
-  sun: 0xffd27a,
-  asphalt: 0x4a4e58,
-  sidewalk: 0xaaa294,
-  sand: 0xf0d09a,
-  water: 0x2a86a8,
-  building: [0xf2c9a0, 0xa8d8c8, 0xf7e8c8, 0xe8a0a0, 0x9fc8e8, 0xd8c8e8, 0xf0d8b0, 0xb8e0b8],
-  car: [0xd8382c, 0x2c8f8f, 0xe8b820, 0xe8e8e8, 0x22242a, 0x7a4a9a, 0xe86a20, 0x3a6ad8],
-  police: 0x1a2a4a,
-  taxi: 0xe8b820,
+export const SPAWN = { x: -30, z: -30, camYaw: 2.379 };
+
+export const TUNING = {
+  walkSpeed: 6,
+  runSpeed: 10.5,
+  carAccel: 13,
+  carBrake: 22,
+  carMaxSpeed: 34, // m/s, about 122 km/h
+  carReverseMax: 9,
+  carTurn: 0.021,
+  carDrag: 0.35,
+  trafficSpeed: 9,
+  pedSpeed: 1.25,
+  wantedDecaySeconds: 18, // one star fades after this long quiet
+  wantedLosBonus: 1.5, // decay runs this much faster with no cruiser near
+  wantedLosRange: 45, // metres: nearer than this, no bonus
+  bustSeconds: 2, // seconds pinned by a cruiser at 5 stars before the bust
+  bustRange: 5, // metres: a cruiser this close can pin Mara
+  bustFine: 200, // dollars the bust costs
+  healthRegen: 2, // health per second while the heat is off
+  jobCompleteRadius: 6, // metres: close enough to finish a stage
+  ramToastCooldown: 4, // seconds between "rammed a cruiser" toasts
 };
 
-export const PLAYER_TUNING = {
-  walkSpeed: 6.5,
-  runSpeed: 11,
-  accel: 40,
-  radius: 0.55,
-  health: 100,
-};
-
-export const CAR_TUNING = {
-  accel: 22,
-  brake: 34,
-  reverseAccel: 12,
-  maxSpeed: 38,
-  maxReverse: 10,
-  drag: 0.55,
-  steerMax: 0.55, // radians at the wheels, scaled down with speed
-  steerSpeed: 2.6,
-  radius: 2.1, // collision circle
-  enterDistance: 4.0,
-};
-
-export const WANTED_TUNING = {
-  maxStars: 5,
-  decaySeconds: 18, // no crime for this long drops one star
-  stealCar: 1,
-  hitPedestrian: 1,
-  hitPolice: 1,
-  punchPolice: 2,
-  maxPoliceCars: 4,
-  policeTopSpeed: 34,
-  policeRamDamage: 8,
-  bustDistance: 3.0,
-  bustHoldSeconds: 2.0,
-  airStars: 4, // at this many stars the air unit joins the chase
-};
-
-// The arsenal. Fists never run dry; guns cost ammo, restocked by finishing
-// jobs. unlock is how many jobs must be done before the slot opens.
-export const WEAPONS = [
-  { id: 'fists', name: 'FISTS', ammo: Infinity, range: 2.4, damage: 0, unlock: 0, cooldown: 0.45 },
-  { id: 'pistol', name: 'PISTOL', ammo: 24, range: 20, damage: 25, unlock: 0, cooldown: 0.35 },
-  { id: 'shotgun', name: 'SHOTGUN', ammo: 8, range: 11, damage: 55, unlock: 1, cooldown: 0.6 },
-  { id: 'smg', name: 'VIPER SMG', ammo: 60, range: 24, damage: 15, unlock: 2, cooldown: 0.12 },
+// The three jobs. Each stage names its objective, its target on the map and
+// the line Silas says when the stage starts. Rewards and the armour /
+// respect bonus land when the job completes.
+export const JOBS = [
+  {
+    name: 'THE PICKUP',
+    reward: 600,
+    intro: {
+      name: 'Silas Crane',
+      initials: 'SC',
+      line: 'Mara, a package is waiting at the pier. Bring it to me. No detours.',
+    },
+    done: {
+      name: 'Silas Crane',
+      initials: 'SC',
+      line: 'Package secured. Silas is pleased — $600.',
+    },
+    stages: [
+      {
+        text: 'Reach the pier and grab the package',
+        objective: 'Pick up the package at the pier',
+        target: { x: 30, z: 224 },
+      },
+    ],
+  },
+  {
+    name: 'HOT WHEELS',
+    reward: 900,
+    intro: {
+      name: 'Silas Crane',
+      initials: 'SC',
+      line: 'A client wants that gold coupe on Marina Row. Take it, bring it to the garage. Quietly.',
+    },
+    done: {
+      name: 'Silas Crane',
+      initials: 'SC',
+      line: 'Delivered clean. $900, no questions asked.',
+    },
+    stages: [
+      {
+        text: 'Steal the gold coupe on Marina Row',
+        objective: 'Steal the gold coupe on Marina Row',
+        target: { x: 90, z: -90 },
+      },
+      {
+        text: 'Deliver it to the garage on the west side',
+        objective: 'Deliver the coupe to the garage on the west side',
+        target: { x: -150, z: 30 },
+      },
+    ],
+  },
+  {
+    name: 'THE LONG WAY HOME',
+    reward: 1500,
+    timerSeconds: 180,
+    intro: {
+      name: 'Silas Crane',
+      initials: 'SC',
+      line: 'The whole bay is looking for you now. Lose them, then come home. Do not get caught.',
+    },
+    done: {
+      name: 'Mara Voss',
+      initials: 'MV',
+      line: 'That is the last of it. The debt is paid — Solmar Bay is mine now.',
+    },
+    stages: [
+      {
+        text: 'Lose the cops before the clock runs out',
+        objective: 'Lose the cops before the clock runs out',
+        target: null, // no waypoint while running: the nav strip hides
+      },
+    ],
+  },
 ];
 
-// Bay radio: the station line under the speedometer when driving.
+export const JOB_BONUS = {
+  armour: 25,
+  respect: 25,
+  ammo: [0, 12, 4, 30], // pistol, shotgun, smg per finished job
+};
+
+// Four weapons. Fists never run out; the shotgun unlocks after one job and
+// the Viper SMG after two.
+export const WEAPONS = [
+  { name: 'FISTS', ammo: Infinity, damage: 15, range: 2.4, rate: 0.35 },
+  { name: 'PISTOL', ammo: 24, damage: 34, range: 42, rate: 0.3 },
+  { name: 'SHOTGUN', ammo: 8, damage: 20, pellets: 3, range: 20, rate: 0.7 },
+  { name: 'VIPER SMG', ammo: 60, damage: 20, range: 48, rate: 0.12 },
+];
+
 export const RADIO = [
-  'SOL 98.4 — Bay Pop',
-  'PALM 101.2 — Sunset Rock',
   'TIDE 88.6 — Night Drive',
   'REEF 104.7 — Island Reggae',
+  'SOL 98.4 — Bay Pop',
+  'PALM 101.2 — Sunset Rock',
 ];
 
-// Solmar Bay Police Bureau units: callsign and the role the dispatch panel
-// shows for each cruiser. The helicopter answers to AIR-1.
-export const POLICE_UNITS = [
-  ['REEF-1', 'RAMMING'],
-  ['CORAL-7', 'PURSUIT'],
-  ['TIDE-3', 'RESPONDING'],
-  ['PALM-2', 'ROADBLOCK'],
-  ['SURF-9', 'SPOTLIGHT'],
-  ['DUNE-5', 'CLOSING IN'],
+// SBPB dispatch units and the roles their rows can carry.
+export const DISPATCH_UNITS = ['TIDE-3', 'PALM-2', 'REEF-1', 'CORAL-7', 'SURF-5', 'DUNE-9', 'BAY-4'];
+export const DISPATCH_ROLES = ['RESPONDING', 'PURSUIT', 'RAMMING', 'ROADBLOCK'];
+
+// Car roster: parked cars the player can steal, and the colours traffic
+// cars wear. The red sedan by the spawn and the gold coupe on Marina Row
+// are the two cars the jobs name.
+export const PARKED_CARS = [
+  { name: 'VELA GT', color: 0xc22e24, x: 30, z: -30, heading: 0.4 },
+  { name: 'BREEZE GT', color: 0xd8a520, x: 90, z: -90, heading: -1.2 },
+  { name: 'PALMA SEDAN', color: 0x9c2b26, x: -102, z: 68, heading: 1.6 },
+  { name: 'CORAL HATCH', color: 0x4a7d8c, x: 136, z: -34, heading: -0.6 },
+  { name: 'SAND VAN', color: 0xc8b070, x: -68, z: 170, heading: 2.8 },
+  { name: 'REEF COUPE', color: 0x3f6d8e, x: 170, z: 102, heading: 0.9 },
 ];
 
-// Original model names for the cars Mara can take.
-export const CAR_MODELS = {
-  sedan: ['VELA GT', 'CORAL CRUISER', 'PALMA SEDAN', 'DUNE RUNNER'],
-  coupe: ['SOLSTICE GT', 'MARINA COUPE', 'BREEZE GT'],
-};
+export const TRAFFIC_COLORS = [0xd8d0c0, 0x4a6a8a, 0x8a4a3a, 0x5a7a4a, 0xc0a040, 0x707880, 0xa05a78, 0x3a5a6a];
+export const TRAFFIC_NAMES = ['CITY SEDAN', 'TOUR TAXI', 'DELIVERY VAN', 'BEACH BUGGY', 'COMMUTER', 'SURF WAGON'];
 
-export const DAY_TUNING = {
-  startDay: 1,
-  startClock: 17 * 60 + 40, // 17:40, sunset over the bay
-  minutesPerSecond: 0.5, // one game minute every two real seconds
-  radioCycleSeconds: 75,
-};
+export const DISTRICTS = [
+  { name: 'THE STRAND', test: (x, z) => z >= 205 },
+  { name: 'PALM BOULEVARD', test: (x, z) => z >= 165 || (x >= 60 && x <= 120 && z >= -120 && z <= -60) },
+  { name: 'NORTH GATE', test: (x, z) => z <= -165 },
+  { name: 'MARINA DISTRICT', test: (x, z) => x >= 135 },
+  { name: 'WEST END', test: (x, z) => x <= -155 },
+  { name: 'DOWNTOWN', test: () => true },
+];
 
-// The district name the HUD shows for a position on the map.
 export function districtAt(x, z) {
-  if (z >= WORLD.beachStart) return 'THE STRAND';
-  if (x <= -150) return 'WEST END';
-  if (x >= 150) return 'MARINA DISTRICT';
-  if (z <= -150) return 'NORTH GATE';
-  if (Math.abs(x) < 60 && Math.abs(z) < 60) return 'DOWNTOWN';
-  return 'PALM BOULEVARD';
+  for (const d of DISTRICTS) {
+    if (d.test(x, z)) return d.name;
+  }
+  return 'DOWNTOWN';
 }
 
-// How hot the bay feels at a wanted level, for the location line.
-export function heatText(stars) {
-  if (stars === 0) return 'CALM';
-  if (stars <= 2) return 'HOT';
-  if (stars <= 4) return 'MOST WANTED';
+// The word the location line carries next to the district, by heat.
+export function heatWord(wanted) {
+  if (wanted <= 0) return 'CALM';
+  if (wanted <= 2) return 'WARM';
+  if (wanted <= 4) return 'MOST WANTED';
   return 'LOCKDOWN';
 }
 
-export const MISSIONS = [
-  {
-    id: 'pickup',
-    title: 'The Pickup',
-    intro: 'Silas: "Mara, a package is waiting at the pier. Bring it to me. No detours."',
-    speaker: 'Silas Crane',
-    initials: 'SC',
-    objective: 'Pick up the package at the pier',
-    stages: ['Reach the pier and grab the package'],
-    reward: 600,
-  },
-  {
-    id: 'hotwheels',
-    title: 'Hot Wheels',
-    intro: 'Silas: "A client wants that gold coupe on Marina Row. Take it, bring it to the garage. Quietly."',
-    speaker: 'Silas Crane',
-    initials: 'SC',
-    objective: 'Steal the gold coupe and deliver it to the garage',
-    stages: ['Steal the gold coupe on Marina Row', 'Deliver it to the garage on the west side'],
-    reward: 900,
-  },
-  {
-    id: 'getaway',
-    title: 'The Long Way Home',
-    intro: 'Silas: "The whole bay is looking for you now. Lose them, then come home. Do not get caught."',
-    speaker: 'Silas Crane',
-    initials: 'SC',
-    objective: 'Lose the cops — get your wanted level to zero',
-    stages: ['Lose the cops before the clock runs out'],
-    timeLimit: 180,
-    reward: 1500,
-  },
-];
+export function formatCash(cash) {
+  return '$' + Math.floor(cash).toLocaleString('en-US');
+}
 
-export const STORY = {
-  title: 'SOLMAR BAY',
-  subtitle: 'A sunset hustle',
-  intro:
-    'Mara Voss came back to Solmar Bay with a busted car, a borrowed name and a debt ' +
-    'to Silas Crane. One job at a time, she is buying her way out — if the bay lets her.',
-  outro:
-    'The sirens fade behind her. The bay is hers again — for tonight, at least. ' +
-    'Mara Voss is out of debt. Solmar Bay is not done with her yet.',
-};
+export function formatClock(minutes) {
+  const total = Math.floor(minutes);
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+export function formatTimer(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  return 'TIME ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}

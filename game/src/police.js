@@ -1,225 +1,211 @@
-// Solmar Bay — the wanted level and the police who answer it.
-// Stars rise when Mara steals a car, hits a pedestrian or rams a cruiser,
-// and fall one at a time when she lays low. Police cruisers spawn at the
-// city edge, chase her car or her on foot, and ram. On foot, a cruiser that
-// stays close too long busts her; in a crash that empties her health, she
-// is wasted. Either way she wakes at the safehouse, lighter by a fine.
-// At four stars the air unit joins: a helicopter circles overhead with a
-// searchlight cone. Every cruiser carries a callsign and a role, so the
-// dispatch panel can name the units closing in on her.
+// The SBPB: wanted stars, cruiser chases, the helicopter, the bust, and
+// the dispatch rows the HUD shows. Wanted decays after 18 quiet seconds,
+// faster when no cruiser is close enough to see Mara.
+import { WORLD, TUNING, DISPATCH_UNITS, DISPATCH_ROLES } from './config.js';
+import { makeRng, pick, range } from './random.js';
+import { makePoliceMesh, makeHeliMesh, syncCarMesh } from './vehicles.js';
+import { moveWithCollision } from './city.js';
 
-import * as THREE from 'three';
-import { WANTED_TUNING, WORLD, POLICE_UNITS } from './config.js';
-import { makePoliceCar, makeHelicopter } from './vehicles.js';
-import { pick } from './random.js';
+export function createPolice(G) {
+  return {
+    wanted: 0,
+    decayT: 0,
+    cruisers: [],
+    heli: null,
+    heliAngle: 0,
+    heliAnnounced: false,
+    bustTimer: 0,
+    ramCooldown: 0,
+    rng: makeRng(G.seed + 53),
+  };
+}
 
-export class Police {
-  constructor(scene, rng, colliders, streetCenters) {
-    this.scene = scene;
-    this.rng = rng;
-    this.colliders = colliders;
-    this.streetCenters = streetCenters;
-    this.cruisers = [];
-    this.stars = 0;
-    this.sinceCrime = 99;
-    this.bustTimer = 0;
-    this.half = (WORLD.blocks * WORLD.pitch) / 2;
-    this.nextUnit = 0; // round-robin through the callsign roster
-    this.heli = null;
-    this.heliAngle = 0;
+export function addWanted(G, n) {
+  const pol = G.police;
+  pol.wanted = Math.max(0, Math.min(5, pol.wanted + n));
+  pol.decayT = 0;
+}
+
+export function setWanted(G, n) {
+  G.police.wanted = Math.max(0, Math.min(5, n));
+  G.police.decayT = 0;
+  G.police.bustTimer = 0;
+}
+
+function spawnCruiser(G) {
+  const pol = G.police;
+  const rng = pol.rng;
+  // Drop the cruiser onto a road 60-100 m from Mara.
+  const angle = rng() * Math.PI * 2;
+  const dist = range(rng, 60, 100);
+  let x = G.player.x + Math.cos(angle) * dist;
+  let z = G.player.z + Math.sin(angle) * dist;
+  x = Math.max(-WORLD.half + 10, Math.min(WORLD.half - 10, x));
+  z = Math.max(-WORLD.half + 10, Math.min(WORLD.half - 10, z));
+  const mesh = makePoliceMesh();
+  G.scene.add(mesh);
+  const cruiser = {
+    name: pick(rng, DISPATCH_UNITS),
+    role: pick(rng, DISPATCH_ROLES),
+    mesh,
+    x,
+    z,
+    heading: Math.atan2(G.player.x - x, G.player.z - z),
+    speed: 0,
+    cond: 100,
+    kind: 'police',
+    owner: 'sbpb',
+    disabled: false,
+    leaving: false,
+  };
+  syncCarMesh(cruiser);
+  pol.cruisers.push(cruiser);
+  return cruiser;
+}
+
+function removeCruiser(G, cruiser) {
+  G.scene.remove(cruiser.mesh);
+  const i = G.police.cruisers.indexOf(cruiser);
+  if (i >= 0) G.police.cruisers.splice(i, 1);
+}
+
+export function nearestCruiserDist(G) {
+  let best = Infinity;
+  for (const c of G.police.cruisers) {
+    if (c.leaving || c.disabled) continue;
+    const d = Math.hypot(c.x - G.player.x, c.z - G.player.z);
+    if (d < best) best = d;
   }
+  return best;
+}
 
-  addCrime(stars) {
-    this.stars = Math.min(WANTED_TUNING.maxStars, this.stars + stars);
-    this.sinceCrime = 0;
-    return this.stars;
+export function dispatchRows(G) {
+  const rows = [];
+  const pol = G.police;
+  if (pol.heli && pol.heli.active) {
+    const d = Math.round(Math.hypot(pol.heli.x - G.player.x, pol.heli.z - G.player.z));
+    rows.push({ name: 'AIR-1', role: 'SPOTLIGHT', dist: d });
   }
-
-  setStars(stars) {
-    this.stars = Math.max(0, Math.min(WANTED_TUNING.maxStars, stars));
-    this.sinceCrime = 0;
-  }
-
-  // What the dispatch panel shows: every live unit, nearest first, with a
-  // live distance in metres. A disabled cruiser is crossed out, and the
-  // helicopter leads the list while it is up.
-  dispatch(playerPos) {
-    const rows = this.cruisers.map((c) => ({
-      callsign: c.callsign,
+  for (const c of pol.cruisers) {
+    if (c.leaving) continue;
+    rows.push({
+      name: c.name,
       role: c.role,
-      dist: Math.round(c.group.position.distanceTo(playerPos)),
-      disabled: c.disabled > 0,
-    }));
-    rows.sort((a, b) => a.dist - b.dist);
-    if (this.heli) {
-      rows.unshift({
-        callsign: 'AIR-1',
-        role: 'SPOTLIGHT',
-        dist: Math.round(this.heli.group.position.distanceTo(playerPos)),
-        disabled: false,
-      });
-    }
-    return rows;
+      dist: Math.round(Math.hypot(c.x - G.player.x, c.z - G.player.z)),
+    });
   }
+  return rows.slice(0, 6);
+}
 
-  // A gunshot on a cruiser: it takes damage, stalls when its health is
-  // gone, and gets towed away a few seconds later.
-  damageCruiser(cruiser, damage) {
-    cruiser.health -= damage;
-    if (cruiser.health <= 0 && cruiser.disabled <= 0) cruiser.disabled = 4;
-  }
+export function updatePolice(G, dt, rawDt) {
+  const pol = G.police;
+  const p = G.player;
 
-  nearestCruiser(pos, range) {
-    let best = null;
-    let bestDist = range;
-    for (const cruiser of this.cruisers) {
-      if (cruiser.disabled > 0) continue;
-      const d = cruiser.group.position.distanceTo(pos);
-      if (d < bestDist) {
-        bestDist = d;
-        best = cruiser;
+  if (pol.ramCooldown > 0) pol.ramCooldown -= rawDt;
+
+  // Wanted decay runs on wall time so a slow machine still sees the heat
+  // fade; the chase itself moves on game time below.
+  if (pol.wanted > 0) {
+    const near = nearestCruiserDist(G);
+    const rate = near > TUNING.wantedLosRange ? TUNING.wantedLosBonus : 1;
+    pol.decayT += rawDt * rate;
+    if (pol.decayT >= TUNING.wantedDecaySeconds) {
+      pol.wanted -= 1;
+      pol.decayT = 0;
+      if (pol.wanted === 0) {
+        for (const c of pol.cruisers) c.leaving = true;
       }
     }
-    return best;
   }
 
-  update(dt, target, targetSpeed, onFoot, onCrime) {
-    this.sinceCrime += dt;
-    // Out of sight, out of mind: with no cruiser close, the heat fades
-    // half again as fast, so a clean break really ends the chase.
-    if (this.stars > 0 && !this.nearestCruiser(target, 45)) this.sinceCrime += dt * 0.5;
-    // Laying low: one star fades every decay window.
-    if (this.stars > 0 && this.sinceCrime > WANTED_TUNING.decaySeconds) {
-      this.stars -= 1;
-      this.sinceCrime = 0;
-    }
-    const wanted = Math.min(this.stars, WANTED_TUNING.maxPoliceCars);
-    while (this.cruisers.length < wanted) this.spawnCruiser(target);
-    while (this.cruisers.length > wanted) {
-      const old = this.cruisers.pop();
-      this.scene.remove(old.group);
-    }
+  // Cruiser count tracks the heat: one plus the stars, at most six.
+  const wantCount = pol.wanted > 0 ? Math.min(1 + pol.wanted, 6) : 0;
+  const active = pol.cruisers.filter((c) => !c.leaving).length;
+  if (active < wantCount) spawnCruiser(G);
 
-    // The air unit: up at four stars, gone when the heat drops.
-    if (this.stars >= WANTED_TUNING.airStars && !this.heli) {
-      this.heli = makeHelicopter();
-      this.heliAngle = 0;
-      this.scene.add(this.heli.group);
-    } else if (this.stars < WANTED_TUNING.airStars && this.heli) {
-      this.scene.remove(this.heli.group);
-      this.heli = null;
+  for (const c of [...pol.cruisers]) {
+    if (c.disabled) continue;
+    if (c.leaving) {
+      // Drive away from Mara and vanish past 150 m.
+      const away = Math.atan2(c.x - p.x, c.z - p.z);
+      c.heading = away;
+      c.speed = 14;
+      c.x += Math.sin(c.heading) * c.speed * dt;
+      c.z += Math.cos(c.heading) * c.speed * dt;
+      syncCarMesh(c);
+      if (Math.hypot(c.x - p.x, c.z - p.z) > 160) removeCruiser(G, c);
+      continue;
     }
-    if (this.heli) {
-      this.heliAngle += dt * 0.22;
-      // A wide, low orbit: 36m out and 13m up keeps the air unit inside the
-      // camera's vertical field while driving. The camera sits above the
-      // car and looks down about 12 degrees, so the top of the frame is
-      // only ~18 degrees above the horizon: any higher and the heli
-      // vanishes above the top edge.
-      const hx = target.x + Math.cos(this.heliAngle) * 36;
-      const hz = target.z + Math.sin(this.heliAngle) * 36;
-      this.heli.group.position.set(hx, 13, hz);
-      this.heli.group.rotation.y = -this.heliAngle;
-      this.heli.rotor.rotation.y += dt * 18;
-    }
+    // Chase: steer toward Mara, faster the hotter it is.
+    const targetHeading = Math.atan2(p.x - c.x, p.z - c.z);
+    let dh = targetHeading - c.heading;
+    while (dh > Math.PI) dh -= Math.PI * 2;
+    while (dh < -Math.PI) dh += Math.PI * 2;
+    c.heading += dh * Math.min(1, dt * 1.6);
+    const topSpeed = 15 + pol.wanted * 2.2;
+    c.speed += (topSpeed - c.speed) * Math.min(1, dt * 0.8);
+    const step = c.speed * dt;
+    moveWithCollision(G.city.colliders, c, Math.sin(c.heading) * step, Math.cos(c.heading) * step);
+    syncCarMesh(c);
 
-    let busted = false;
-    for (let i = this.cruisers.length - 1; i >= 0; i -= 1) {
-      const cruiser = this.cruisers[i];
-      // A shot-up cruiser stalls with its lights out, then gets towed.
-      if (cruiser.disabled > 0) {
-        cruiser.disabled -= dt;
-        cruiser.lightBar.material.color.setHex(0x303030);
-        if (cruiser.disabled <= 0 && cruiser.health <= 0) {
-          this.scene.remove(cruiser.group);
-          this.cruisers.splice(i, 1);
-        }
-        continue;
-      }
-      // Chase: steer toward the target, faster than traffic, ramming speed.
-      // Up close the cruiser slows right down and turns hard, so it can
-      // actually close in on a player on foot instead of orbiting her.
-      const to = new THREE.Vector3().subVectors(target, cruiser.group.position);
-      to.y = 0;
-      const dist = to.length();
-      const wantHeading = Math.atan2(to.x, to.z);
-      let diff = wantHeading - cruiser.heading;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      const close = dist < 12;
-      const turnRate = close ? 3.4 : 1.6;
-      cruiser.heading += THREE.MathUtils.clamp(diff, -turnRate * dt, turnRate * dt);
-      const speed = Math.min(
-        WANTED_TUNING.policeTopSpeed,
-        close ? 4 + dist * 0.6 : 12 + dist * 0.6,
-      );
-      cruiser.group.position.x += Math.sin(cruiser.heading) * speed * dt;
-      cruiser.group.position.z += Math.cos(cruiser.heading) * speed * dt;
-      cruiser.group.position.x = Math.max(-WORLD.bounds, Math.min(WORLD.bounds, cruiser.group.position.x));
-      cruiser.group.position.z = Math.max(-WORLD.bounds, Math.min(WORLD.bounds, cruiser.group.position.z));
-      cruiser.group.rotation.y = cruiser.heading;
-      for (const wheel of cruiser.wheels) wheel.rotation.x += speed * dt * 2.2;
-      // Flashing light bar.
-      cruiser.lightBar.material.color.setHex(Math.floor(performance.now() / 220) % 2 === 0 ? 0xff2020 : 0x2040ff);
-
-      // Ram: contact hurts, and on foot it starts the bust clock.
-      if (dist < 3.2) {
-        if (onFoot) {
-          this.bustTimer += dt;
-          if (this.bustTimer > WANTED_TUNING.bustHoldSeconds) busted = true;
-        } else if (onCrime) {
-          onCrime('ram');
+    // Ram the player's car: damage, shove, a toast, and no extra heat
+    // beyond the chase itself.
+    const dist = Math.hypot(c.x - p.x, c.z - p.z);
+    if (p.inCar && dist < 4.2) {
+      const car = p.car;
+      if (car && car.cond > 0) {
+        car.cond = Math.max(0, car.cond - 6);
+        car.speed *= 0.55;
+        c.speed *= 0.4;
+        if (pol.ramCooldown <= 0) {
+          pol.ramCooldown = TUNING.ramToastCooldown;
+          G.hud.toast('You rammed a cruiser! ★');
+          G.audio.punch();
         }
       }
     }
-    if (this.cruisers.length === 0) this.bustTimer = 0;
-    else if (!onFoot) this.bustTimer = 0;
-    return busted;
-  }
-
-  nearestStreet(v) {
-    let best = this.streetCenters[0];
-    for (const s of this.streetCenters) {
-      if (Math.abs(s - v) < Math.abs(best - v)) best = s;
+    // On foot at five stars, a cruiser on top of Mara starts the bust.
+    // The bust clock runs on wall time: a slow machine still gets caught.
+    if (!p.inCar && pol.wanted >= 5 && dist < TUNING.bustRange) {
+      pol.bustTimer += rawDt;
+      if (pol.bustTimer >= TUNING.bustSeconds) {
+        pol.bustTimer = 0;
+        G.onBusted();
+      }
     }
-    return best;
+  }
+  if (p.inCar || pol.wanted < 5 || nearestCruiserDist(G) > TUNING.bustRange) {
+    pol.bustTimer = Math.max(0, pol.bustTimer - rawDt * 2);
   }
 
-  spawnCruiser(target) {
-    const cruiser = makePoliceCar(this.rng);
-    cruiser.parked = false;
-    const unit = POLICE_UNITS[this.nextUnit % POLICE_UNITS.length];
-    this.nextUnit += 1;
-    cruiser.callsign = unit[0];
-    cruiser.role = unit[1];
-    cruiser.health = 100;
-    cruiser.disabled = 0;
-    // Appear on a road a short block from the player — close enough to be
-    // a threat at once, far enough not to spawn on top of her.
-    const angle = this.rng() * Math.PI * 2;
-    const dist = 35 + this.rng() * 20;
-    let x = target.x + Math.cos(angle) * dist;
-    let z = target.z + Math.sin(angle) * dist;
-    if (this.rng() < 0.5) x = this.nearestStreet(x);
-    else z = this.nearestStreet(z);
-    x = THREE.MathUtils.clamp(x, -this.half, this.half);
-    z = THREE.MathUtils.clamp(z, -this.half, this.half);
-    cruiser.group.position.set(x, 0, z);
-    cruiser.heading = Math.atan2(target.x - x, target.z - z);
-    cruiser.group.rotation.y = cruiser.heading;
-    this.scene.add(cruiser.group);
-    this.cruisers.push(cruiser);
-  }
-
-  clear() {
-    for (const cruiser of this.cruisers) this.scene.remove(cruiser.group);
-    this.cruisers.length = 0;
-    if (this.heli) {
-      this.scene.remove(this.heli.group);
-      this.heli = null;
+  // Helicopter: joins at four stars, circles low with its light on Mara.
+  if (pol.wanted >= 4) {
+    if (!pol.heli) {
+      const mesh = makeHeliMesh();
+      mesh.userData.spot.target = G.spotTarget;
+      G.scene.add(mesh);
+      pol.heli = { mesh, active: true, x: p.x, z: p.z, y: 13 };
+      pol.heliAnnounced = false;
     }
-    this.stars = 0;
-    this.bustTimer = 0;
-    this.sinceCrime = 99;
+    pol.heli.active = true;
+    if (!pol.heliAnnounced) {
+      pol.heliAnnounced = true;
+      G.hud.showDialogue('Capt. Drew', 'CD', 'Air One has you in the light, Voss. Give it up.');
+    }
+    pol.heliAngle += dt * 0.45;
+    const hx = p.x + Math.cos(pol.heliAngle) * 12;
+    const hz = p.z + Math.sin(pol.heliAngle) * 12;
+    pol.heli.x = hx;
+    pol.heli.z = hz;
+    pol.heli.mesh.position.set(hx, 13, hz);
+    pol.heli.mesh.rotation.y = -pol.heliAngle;
+    pol.heli.mesh.userData.rotor.rotation.y += dt * 22;
+    G.spotTarget.position.set(p.x, 1, p.z);
+  } else if (pol.heli && pol.heli.active) {
+    pol.heli.active = false;
+    G.scene.remove(pol.heli.mesh);
+    pol.heli = null;
   }
+
+  G.audio.setSiren(pol.wanted >= 2);
 }
